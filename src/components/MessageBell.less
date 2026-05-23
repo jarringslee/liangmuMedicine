@@ -1,0 +1,61 @@
+.message-bell-popover {
+  width: 360px;
+  max-width: 92vw;
+  margin: -4px -8px;
+  padding: 4px 0;
+}
+
+.message-bell-popover__list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.message-bell-item {
+  padding: 8px 4px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.message-bell-item:hover {
+  background: rgba(47, 111, 78, 0.06);
+}
+
+.message-bell-item--unread .message-bell-item__preview {
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.message-bell-item__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.message-bell-item__sender {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.message-bell-item__date {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.message-bell-item__preview {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-bell-popover__footer {
+  padding-top: 4px;
+}

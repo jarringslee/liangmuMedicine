@@ -1,0 +1,338 @@
+/* 管理员端 · 数据概览 — 良木药谷 */
+
+.admin-dashboard {
+  min-height: 100vh;
+  background: linear-gradient(165deg, #f5f7f4 0%, #eef1ee 45%, #e8ebe8 100%);
+}
+
+.admin-dashboard__sider {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow: auto;
+  border-right: 1px solid rgba(47, 111, 78, 0.12);
+  background: linear-gradient(180deg, #fbfdfb 0%, #f3f6f3 100%) !important;
+
+  .ant-layout-sider-children {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+}
+
+.admin-dashboard__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 24px;
+  border-bottom: 1px solid rgba(47, 111, 78, 0.1);
+}
+
+.admin-dashboard__brand-icon {
+  font-size: 28px;
+  color: #2f6f4e;
+}
+
+.admin-dashboard__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.admin-dashboard__brand-name {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  color: #1a2e22;
+}
+
+.admin-dashboard__brand-sub {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.admin-dashboard__nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-dashboard__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+
+  .anticon {
+    font-size: 16px;
+    color: #5c7268;
+  }
+
+  &:hover {
+    background: rgba(47, 111, 78, 0.08);
+    color: #1a2e22;
+  }
+
+  &.is-active {
+    background: rgba(47, 111, 78, 0.14);
+    color: #2f6f4e;
+    font-weight: 600;
+
+    .anticon {
+      color: #2f6f4e;
+    }
+  }
+}
+
+.admin-dashboard__sider-foot {
+  padding: 16px;
+  border-top: 1px solid rgba(47, 111, 78, 0.1);
+}
+
+.admin-dashboard__sider-foot-text {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.admin-dashboard__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: auto !important;
+  min-height: 64px;
+  padding: 12px 24px !important;
+  line-height: 1.4;
+  background: rgba(251, 253, 251, 0.92) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(47, 111, 78, 0.1);
+}
+
+.admin-dashboard__content {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.admin-dashboard__welcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+
+  h3.ant-typography {
+    color: #1a2e22 !important;
+  }
+}
+
+.admin-dashboard__summary-row {
+  margin-bottom: 8px !important;
+}
+
+.admin-dashboard__stat-card {
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(26, 46, 34, 0.06);
+  transition:
+    box-shadow 0.25s,
+    transform 0.2s;
+
+  &:hover {
+    box-shadow: 0 8px 24px rgba(26, 46, 34, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .ant-card-body {
+    padding: 18px 18px 16px !important;
+  }
+}
+
+.admin-dashboard__stat-title {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.admin-dashboard__stat-value-wrap {
+  margin-bottom: 4px;
+
+  .ant-statistic-content-value {
+    color: #1a2e22 !important;
+  }
+}
+
+.admin-dashboard__stat-hint {
+  font-size: 12px;
+}
+
+.admin-dashboard__stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  opacity: 0.92;
+}
+
+.admin-dashboard__stat-card--teal .admin-dashboard__stat-icon {
+  background: rgba(19, 143, 143, 0.12);
+  color: #138f8f;
+}
+
+.admin-dashboard__stat-card--green .admin-dashboard__stat-icon {
+  background: rgba(47, 111, 78, 0.12);
+  color: #2f6f4e;
+}
+
+.admin-dashboard__stat-card--gold .admin-dashboard__stat-icon {
+  background: rgba(201, 162, 39, 0.15);
+  color: #a67c00;
+}
+
+.admin-dashboard__stat-card--red .admin-dashboard__stat-icon {
+  background: rgba(207, 46, 46, 0.1);
+  color: #cf2e2e;
+}
+
+.admin-dashboard__stat-card--blue .admin-dashboard__stat-icon {
+  background: rgba(47, 104, 201, 0.1);
+  color: #2f68c9;
+}
+
+.admin-dashboard__stat-card--purple .admin-dashboard__stat-icon {
+  background: rgba(114, 46, 209, 0.1);
+  color: #722ed1;
+}
+
+.admin-dashboard__stat-card--cyan .admin-dashboard__stat-icon {
+  background: rgba(19, 194, 194, 0.12);
+  color: #08979c;
+}
+
+.admin-dashboard__stat-card--lime .admin-dashboard__stat-icon {
+  background: rgba(115, 209, 61, 0.15);
+  color: #52c41a;
+}
+
+.admin-dashboard__sub-stats {
+  margin-bottom: 16px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.65) !important;
+  border: 1px solid rgba(47, 111, 78, 0.08);
+
+  .ant-card-body {
+    padding: 16px 20px !important;
+  }
+}
+
+.admin-dashboard__sub-stat {
+  padding: 8px 4px;
+}
+
+.admin-dashboard__sub-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a2e22;
+  margin: 6px 0 4px;
+}
+
+.admin-dashboard__sub-stat-trend {
+  font-size: 12px;
+}
+
+.admin-dashboard__chart-card {
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(26, 46, 34, 0.06);
+
+  .ant-card-head-title {
+    font-weight: 600;
+    color: #1a2e22;
+  }
+
+  .ant-card-body {
+    padding-top: 8px !important;
+  }
+}
+
+.admin-dashboard__todo-card {
+  height: 100%;
+
+  .ant-card-body {
+    padding-top: 8px !important;
+  }
+}
+
+.admin-dashboard__warning-item {
+  align-items: flex-start !important;
+}
+
+.admin-dashboard__ai-card {
+  height: 100%;
+
+  .ant-alert {
+    border-radius: 8px;
+  }
+}
+
+.admin-dashboard__footer-note {
+  margin-top: 8px;
+  text-align: center;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  .ant-card-body {
+    padding: 16px !important;
+  }
+}
+
+.admin-dashboard__user-trigger {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.admin-dashboard__user-trigger:hover {
+  background: rgba(47, 111, 78, 0.08);
+}
+
+.admin-dashboard__user-trigger:focus-visible {
+  outline: 2px solid rgba(47, 111, 78, 0.45);
+  outline-offset: 2px;
+}
+
+@media (max-width: 991px) {
+  .admin-dashboard__header {
+    padding-inline: 16px !important;
+  }
+
+  .admin-dashboard__content {
+    padding: 16px;
+  }
+}

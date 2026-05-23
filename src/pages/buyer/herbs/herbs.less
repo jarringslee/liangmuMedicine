@@ -1,0 +1,142 @@
+/* 采购商 · 药材浏览 — 良木药谷 */
+
+.buyer-herbs__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  h3.ant-typography {
+    color: #1a2e22 !important;
+    margin: 0 !important;
+  }
+}
+
+.buyer-herbs__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.buyer-herbs__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(47, 111, 78, 0.1);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.buyer-herbs__toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.buyer-herbs__card {
+  border-radius: 12px !important;
+  overflow: hidden;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+  border: 1px solid rgba(47, 111, 78, 0.08) !important;
+  background: #fff;
+  cursor: pointer;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(26, 46, 34, 0.12);
+    border-color: rgba(47, 111, 78, 0.24) !important;
+  }
+
+  .ant-card-body {
+    padding: 14px 16px 16px !important;
+  }
+
+  .ant-card-cover {
+    aspect-ratio: 16 / 9;
+    background: #f3f6f3 center / cover no-repeat;
+    border-bottom: 1px solid rgba(47, 111, 78, 0.06);
+  }
+}
+
+.buyer-herbs__card-cover {
+  width: 100%;
+  height: 100%;
+  background: #f3f6f3 center / cover no-repeat;
+}
+
+.buyer-herbs__card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  .ant-typography {
+    margin: 0 !important;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.buyer-herbs__card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.65);
+  margin: 8px 0 10px;
+
+  .anticon {
+    color: #5c7268;
+    margin-right: 4px;
+  }
+}
+
+.buyer-herbs__card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px dashed rgba(47, 111, 78, 0.12);
+  padding-top: 10px;
+}
+
+.buyer-herbs__card-trace {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #2f6f4e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.buyer-herbs__empty {
+  padding: 60px 0;
+}
+
+.buyer-herbs__user-trigger {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.buyer-herbs__user-trigger:hover {
+  background: rgba(47, 111, 78, 0.08);
+}
+
+@media (max-width: 575px) {
+  .buyer-herbs__toolbar {
+    padding: 12px;
+  }
+}

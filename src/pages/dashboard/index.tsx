@@ -53,9 +53,9 @@ import {
   siderReportProgressPercent,
   summaryCards,
 } from '../../mock/dashboard/overview'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
 import { MessageBell } from '../../components/MessageBell'
-import { mockAdminProfile } from '../../mock/user/profile'
 import { pendingInspectionTasks } from '../../mock/task/inspection'
 import './index.less'
 
@@ -77,6 +77,7 @@ const summaryIconMap: Record<SummaryIconKey, ReactNode> = {
 
 const menuIconMap: Record<DashboardMenuIconKey, ReactNode> = {
   dashboard: <DashboardOutlined />,
+  medicineBox: <MedicineBoxOutlined />,
   shop: <ShopOutlined />,
   experiment: <ExperimentOutlined />,
   truck: <TruckOutlined />,
@@ -122,6 +123,9 @@ const batchColumns: ColumnsType<BatchRow> = [
 
 function DashboardInner() {
   const { token } = theme.useToken()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { session } = useAuth()
 
   const lineOption = useMemo(
     () => ({
@@ -235,7 +239,15 @@ function DashboardInner() {
             <button
               key={item.key}
               type="button"
-              className={`admin-dashboard__nav-item ${item.key === 'dash' ? 'is-active' : ''}`}
+              className={`admin-dashboard__nav-item ${
+                (item.path && location.pathname.startsWith(item.path)) ||
+                (item.key === 'dash' && location.pathname === '/dashboard')
+                  ? 'is-active'
+                  : ''
+              }`}
+              onClick={() => {
+                if (item.path) navigate(item.path)
+              }}
             >
               {menuIconMap[item.iconKey]}
               <span>{item.label}</span>
@@ -271,10 +283,10 @@ function DashboardInner() {
                   <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
                   <div style={{ lineHeight: 1.2 }}>
                     <div>
-                      <Text strong>{mockAdminProfile.displayName}</Text>
+                      <Text strong>{session?.displayName ?? '—'}</Text>
                     </div>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {mockAdminProfile.email}
+                      {session?.email ?? '—'}
                     </Text>
                   </div>
                 </Space>

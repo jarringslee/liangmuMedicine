@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Button, Flex, Form, Input, message, Segmented, Tabs, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
 import { loginRoleTabs, type LoginRoleKey } from '../../mock/login/roles'
-import { mockAdminProfile, mockStaticAdminCredentials } from '../../mock/user/profile'
+import { getDefaultHome, verifyStaticLogin } from '../../mock/user/credentials'
+import { sanitizeRedirectPath } from '../../utils/auth'
 
 const { Text } = Typography
 
@@ -15,24 +17,10 @@ type FieldValues = {
 
 const ACCOUNT_ERROR = '输入信息错误'
 
-function tryStaticLogin(role: LoginRoleKey, mode: LoginAccountMode, account: string, password: string): boolean {
-  if (role !== 'admin') return false
-
-  const pwd = mockStaticAdminCredentials.password
-  const u = account.trim()
-  const p = password
-
-  if (mode === 'username') {
-    const expectUser = mockAdminProfile.loginUsername ?? ''
-    return u === expectUser && p === pwd
-  }
-
-  const email = mockAdminProfile.email.trim().toLowerCase()
-  return u.toLowerCase() === email && p === pwd
-}
-
 export function LoginForm() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { login } = useAuth()
   const [role, setRole] = useState<LoginRoleKey>('admin')
   const [mode, setMode] = useState<LoginAccountMode>('username')
   const [form] = Form.useForm<FieldValues>()
@@ -49,13 +37,17 @@ export function LoginForm() {
   )
 
   const onFinish = (values: FieldValues) => {
-    const ok = tryStaticLogin(role, mode, values.account ?? '', values.password ?? '')
-    if (!ok) {
+    const session = verifyStaticLogin(role, mode, values.account ?? '', values.password ?? '')
+    if (!session) {
       message.error(ACCOUNT_ERROR)
       return
     }
-    message.success(`欢迎，${mockAdminProfile.displayName}`)
-    navigate('/dashboard')
+
+    login(session)
+    message.success(`欢迎，${session.displayName}`)
+
+    const redirect = sanitizeRedirectPath(searchParams.get('redirect'))
+    navigate(redirect ?? getDefaultHome(session.role), { replace: true })
   }
 
   const onForgotPassword = () => {

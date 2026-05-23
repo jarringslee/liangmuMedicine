@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-label="当归">
+  <defs>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8a4f2a"/>
+      <stop offset="100%" stop-color="#4d2a14"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="360" fill="url(#g2)"/>
+  <g fill="rgba(255,255,255,0.10)">
+    <circle cx="500" cy="80" r="100"/>
+    <circle cx="80" cy="300" r="90"/>
+  </g>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#fff" text-anchor="middle">
+    <text x="300" y="170" font-size="68" font-weight="700" letter-spacing="6">当 归</text>
+    <text x="300" y="220" font-size="22" fill="rgba(255,255,255,0.85)">Angelica sinensis</text>
+    <text x="300" y="290" font-size="18" fill="rgba(255,255,255,0.7)">四川 · 阿坝 · 高原产区</text>
+  </g>
+</svg>

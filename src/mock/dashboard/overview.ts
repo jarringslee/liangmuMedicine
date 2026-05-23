@@ -115,6 +115,7 @@ export const secondaryStats: SecondaryStatItem[] = [
 /** 侧栏菜单：iconKey 在页面内映射为 @ant-design/icons */
 export type DashboardMenuIconKey =
   | 'dashboard'
+  | 'medicineBox'
   | 'shop'
   | 'experiment'
   | 'truck'
@@ -126,10 +127,13 @@ export type DashboardMenuItem = {
   key: string
   iconKey: DashboardMenuIconKey
   label: string
+  /** 有 path 时侧栏可跳转 */
+  path?: string
 }
 
 export const dashboardMenuItems: DashboardMenuItem[] = [
-  { key: 'dash', iconKey: 'dashboard', label: '数据概览' },
+  { key: 'dash', iconKey: 'dashboard', label: '数据概览', path: '/dashboard' },
+  { key: 'herbs', iconKey: 'medicineBox', label: '药材管理', path: '/admin/herbs' },
   { key: 'grower', iconKey: 'shop', label: '种植商管理' },
   { key: 'process', iconKey: 'experiment', label: '加工商管理' },
   { key: 'buyer', iconKey: 'truck', label: '采购商管理' },

@@ -1,0 +1,867 @@
+{
+  "version": 1,
+  "batches": [
+    {
+      "id": "hb-0001",
+      "batchNo": "YM-2026-GS-HQ-0318",
+      "traceCode": "YM-TRACE-2026-0001",
+      "herbName": "黄芪",
+      "category": "root",
+      "growerId": "g-longxi-qihuang",
+      "growerName": "陇西岐黄种植合作社",
+      "plantingStartDate": "2025-03-12",
+      "origin": {
+        "province": "甘肃省",
+        "city": "定西市",
+        "district": "陇西县",
+        "address": "首阳镇岐黄黄芪基地 A3 区"
+      },
+      "environment": "海拔约 2100m，年均温 7.6℃，沙质壤土，PH 7.8",
+      "coverImageUrl": "/images/herbs/huangqi.svg",
+      "description": "陇西道地黄芪，地下根系发达，已通过基础审核。",
+      "stage": "warehousing",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-03-18 09:12",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-29 09:12",
+      "events": [
+        {
+          "id": "ev-0001-1",
+          "type": "create",
+          "title": "批次建档",
+          "description": "由管理员代录建档，关联陇西岐黄种植合作社。",
+          "occurredAt": "2026-03-18 09:12",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0001-2",
+          "type": "audit",
+          "title": "审核通过",
+          "description": "基础信息与产地证明初核通过。",
+          "occurredAt": "2026-03-19 10:40",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0001-3",
+          "type": "stageChange",
+          "title": "进入仓储",
+          "fromStage": "harvested",
+          "toStage": "warehousing",
+          "occurredAt": "2026-04-15 14:08",
+          "operatorName": "陇西岐黄仓储中心",
+          "operatorRole": "grower"
+        },
+        {
+          "id": "ev-0001-4",
+          "type": "qcReport",
+          "title": "首检报告：合格",
+          "description": "农残与重金属检测均在限值内；含量符合药典要求。",
+          "occurredAt": "2026-04-22 11:20",
+          "operatorName": "甘肃省中药材质检中心",
+          "operatorRole": "system",
+          "attachments": [{ "name": "首检报告.pdf", "url": "#" }]
+        }
+      ]
+    },
+    {
+      "id": "hb-0002",
+      "batchNo": "YM-2026-SC-DG-0297",
+      "traceCode": "YM-TRACE-2026-0002",
+      "herbName": "当归",
+      "category": "root",
+      "growerId": "g-chuanzang-bencao",
+      "growerName": "川藏本草种植基地",
+      "plantingStartDate": "2025-04-02",
+      "origin": {
+        "province": "四川省",
+        "city": "阿坝藏族羌族自治州",
+        "district": "松潘县",
+        "address": "本草高原种植区 C 区"
+      },
+      "environment": "海拔约 2800m，云雾日照充足，腐殖质富集土壤",
+      "coverImageUrl": "/images/herbs/danggui.svg",
+      "description": "川产高原当归，根条粗壮，香气浓郁。",
+      "stage": "processing",
+      "auditStatus": "approved",
+      "riskLevel": "low",
+      "createdAt": "2026-04-08 16:30",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-29 08:55",
+      "events": [
+        {
+          "id": "ev-0002-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-04-08 16:30",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0002-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-04-09 09:15",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0002-3",
+          "type": "stageChange",
+          "title": "进入初加工",
+          "fromStage": "harvested",
+          "toStage": "processing",
+          "occurredAt": "2026-04-25 10:00",
+          "operatorName": "本草初加工厂",
+          "operatorRole": "processor"
+        }
+      ]
+    },
+    {
+      "id": "hb-0003",
+      "batchNo": "YM-2026-YN-GC-0441",
+      "traceCode": "YM-TRACE-2026-0003",
+      "herbName": "甘草",
+      "category": "root",
+      "growerId": "g-diannan-yaocai",
+      "growerName": "滇南药材种植联社",
+      "plantingStartDate": "2024-09-20",
+      "origin": {
+        "province": "云南省",
+        "city": "文山壮族苗族自治州",
+        "district": "砚山县",
+        "address": "联社 7 号种植带"
+      },
+      "environment": "亚热带季风气候，年均温 17.8℃，砂质红壤",
+      "coverImageUrl": "/images/herbs/gancao.svg",
+      "description": "滇南三年生甘草，地下茎粗壮，糖分高。",
+      "stage": "shipped",
+      "auditStatus": "approved",
+      "riskLevel": "medium",
+      "createdAt": "2026-02-14 11:00",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-28 21:40",
+      "events": [
+        {
+          "id": "ev-0003-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-02-14 11:00",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0003-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-02-15 09:30",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0003-3",
+          "type": "qcReport",
+          "title": "二次质检：合格",
+          "description": "甘草酸含量 2.4%，符合药典要求。",
+          "occurredAt": "2026-04-10 14:50",
+          "operatorName": "云南省药品检验所",
+          "operatorRole": "system"
+        },
+        {
+          "id": "ev-0003-4",
+          "type": "transport",
+          "title": "冷链运输启程",
+          "description": "运输途中环境温度需保持 ≤25℃。",
+          "occurredAt": "2026-04-28 18:20",
+          "operatorName": "滇南药材物流",
+          "operatorRole": "processor"
+        }
+      ]
+    },
+    {
+      "id": "hb-0004",
+      "batchNo": "YM-2026-HN-HL-0182",
+      "traceCode": "YM-TRACE-2026-0004",
+      "herbName": "黄连",
+      "category": "root",
+      "growerId": "g-xiangxi-linxia",
+      "growerName": "湘西林下种植基地",
+      "plantingStartDate": "2023-10-08",
+      "origin": {
+        "province": "湖南省",
+        "city": "湘西土家族苗族自治州",
+        "district": "永顺县",
+        "address": "林下黄连示范区 B2"
+      },
+      "environment": "林下散射光环境，年均温 15℃，腐殖质丰厚",
+      "coverImageUrl": "/images/herbs/huanglian.svg",
+      "description": "三年生林下黄连，小檗碱含量优良。",
+      "stage": "harvested",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-04-20 09:45",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-28 16:03",
+      "events": [
+        {
+          "id": "ev-0004-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-04-20 09:45",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0004-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-04-21 10:10",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0004-3",
+          "type": "stageChange",
+          "title": "采收完成",
+          "fromStage": "planting",
+          "toStage": "harvested",
+          "occurredAt": "2026-04-26 15:32",
+          "operatorName": "湘西林下种植基地",
+          "operatorRole": "grower"
+        }
+      ]
+    },
+    {
+      "id": "hb-0005",
+      "batchNo": "YM-2026-SX-DZ-0501",
+      "traceCode": "YM-TRACE-2026-0005",
+      "herbName": "杜仲",
+      "category": "bark",
+      "growerId": "g-qinling-bencao",
+      "growerName": "秦岭本草种植合作社",
+      "plantingStartDate": "2018-04-20",
+      "origin": {
+        "province": "陕西省",
+        "city": "商洛市",
+        "district": "商州区",
+        "address": "夜村镇杜仲示范园 A1 区"
+      },
+      "environment": "秦岭南麓，海拔约 900m，年均温 12.8℃，黄棕壤",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "秦岭南麓道地杜仲，八年生剥皮采收，纤维强韧、含胶率高。",
+      "stage": "warehousing",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-03-10 10:20",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-22 09:00",
+      "events": [
+        {
+          "id": "ev-0005-1",
+          "type": "create",
+          "title": "批次建档",
+          "description": "由管理员代录建档，关联秦岭本草种植合作社。",
+          "occurredAt": "2026-03-10 10:20",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0005-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-03-11 09:00",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0005-3",
+          "type": "stageChange",
+          "title": "进入仓储",
+          "fromStage": "harvested",
+          "toStage": "warehousing",
+          "occurredAt": "2026-04-15 16:40",
+          "operatorName": "秦岭本草仓储中心",
+          "operatorRole": "grower"
+        },
+        {
+          "id": "ev-0005-4",
+          "type": "qcReport",
+          "title": "首检报告：合格",
+          "description": "桃叶珊瑚苷与松脂醇二葡萄糖苷含量达标。",
+          "occurredAt": "2026-04-21 14:10",
+          "operatorName": "陕西省中药材质检中心",
+          "operatorRole": "system",
+          "attachments": [{ "name": "杜仲首检报告.pdf", "url": "#" }]
+        }
+      ]
+    },
+    {
+      "id": "hb-0006",
+      "batchNo": "YM-2026-SX-SZ-0512",
+      "traceCode": "YM-TRACE-2026-0006",
+      "herbName": "山茱萸",
+      "category": "fruitSeed",
+      "growerId": "g-qinling-bencao",
+      "growerName": "秦岭本草种植合作社",
+      "plantingStartDate": "2020-09-05",
+      "origin": {
+        "province": "陕西省",
+        "city": "商洛市",
+        "district": "丹凤县",
+        "address": "竹林关镇山茱萸基地 B2 区"
+      },
+      "environment": "秦岭南坡，海拔约 1100m，年均温 13.5℃，砂质壤土",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "丹凤山茱萸，果肉饱满色泽红艳，马钱苷含量优良。",
+      "stage": "shipped",
+      "auditStatus": "approved",
+      "riskLevel": "low",
+      "createdAt": "2026-02-22 14:18",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-08 11:05",
+      "events": [
+        {
+          "id": "ev-0006-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-02-22 14:18",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0006-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-02-23 09:32",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0006-3",
+          "type": "qcReport",
+          "title": "复检：合格",
+          "description": "马钱苷含量 0.6%，符合药典限度。",
+          "occurredAt": "2026-04-12 10:45",
+          "operatorName": "陕西省药品检验所",
+          "operatorRole": "system",
+          "attachments": [{ "name": "山茱萸复检报告.pdf", "url": "#" }]
+        },
+        {
+          "id": "ev-0006-4",
+          "type": "transport",
+          "title": "干货物流启程",
+          "description": "目标采购方：西安秦岭本草采购贸易有限公司。",
+          "occurredAt": "2026-05-06 09:20",
+          "operatorName": "秦岭物流",
+          "operatorRole": "processor"
+        }
+      ]
+    },
+    {
+      "id": "hb-0007",
+      "batchNo": "YM-2026-SX-CH-0523",
+      "traceCode": "YM-TRACE-2026-0007",
+      "herbName": "柴胡",
+      "category": "root",
+      "growerId": "g-qinling-bencao",
+      "growerName": "秦岭本草种植合作社",
+      "plantingStartDate": "2025-10-12",
+      "origin": {
+        "province": "陕西省",
+        "city": "商洛市",
+        "district": "洛南县",
+        "address": "古城镇柴胡 GAP 示范基地"
+      },
+      "environment": "秦岭东段南麓，海拔约 1050m，年均温 11.4℃，褐色森林土",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "GAP 规范种植北柴胡，第一年苗情良好。",
+      "stage": "planting",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-03-26 08:50",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-04-30 09:00",
+      "events": [
+        {
+          "id": "ev-0007-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-03-26 08:50",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0007-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-03-27 11:20",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0007-3",
+          "type": "note",
+          "title": "苗期巡查",
+          "description": "出苗率 88%，无明显病虫害。",
+          "occurredAt": "2026-04-30 09:00",
+          "operatorName": "秦岭本草农技组",
+          "operatorRole": "grower"
+        }
+      ]
+    },
+    {
+      "id": "hb-0008",
+      "batchNo": "YM-2026-SX-DS-0534",
+      "traceCode": "YM-TRACE-2026-0008",
+      "herbName": "丹参",
+      "category": "root",
+      "growerId": "g-qinling-bencao",
+      "growerName": "秦岭本草种植合作社",
+      "plantingStartDate": "2025-03-20",
+      "origin": {
+        "province": "陕西省",
+        "city": "商洛市",
+        "district": "山阳县",
+        "address": "色河铺镇丹参连片种植区 D 区"
+      },
+      "environment": "秦岭南麓低山区，海拔约 800m，年均温 13.6℃，棕褐土",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "山阳丹参，根色紫红，丹参酮含量待复检确认。",
+      "stage": "harvested",
+      "auditStatus": "pending",
+      "riskLevel": "normal",
+      "createdAt": "2026-05-12 17:42",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-12 17:42",
+      "events": [
+        {
+          "id": "ev-0008-1",
+          "type": "create",
+          "title": "批次建档",
+          "description": "由种植商提交，待管理员审核。",
+          "occurredAt": "2026-05-12 17:42",
+          "operatorName": "秦岭本草种植合作社",
+          "operatorRole": "grower",
+          "scopes": ["admin", "grower"]
+        }
+      ]
+    },
+    {
+      "id": "hb-0009",
+      "batchNo": "YM-2026-SX-BL-0545",
+      "traceCode": "YM-TRACE-2026-0009",
+      "herbName": "板蓝根",
+      "category": "root",
+      "growerId": "g-qinling-bencao",
+      "growerName": "秦岭本草种植合作社",
+      "plantingStartDate": "2025-04-05",
+      "origin": {
+        "province": "陕西省",
+        "city": "商洛市",
+        "district": "商南县",
+        "address": "城关镇板蓝根种植带 E 区"
+      },
+      "environment": "秦岭东段南麓，海拔约 700m，年均温 14.2℃，黄棕壤",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "商南板蓝根，秋采集中入库，靛玉红含量略有波动。",
+      "stage": "warehousing",
+      "auditStatus": "approved",
+      "riskLevel": "medium",
+      "createdAt": "2026-04-02 13:10",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-15 10:40",
+      "events": [
+        {
+          "id": "ev-0009-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-04-02 13:10",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0009-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-04-03 09:50",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0009-3",
+          "type": "qcReport",
+          "title": "首检：靛玉红偏低",
+          "description": "靛玉红实测低于内控值，要求复检后再决定流向。",
+          "occurredAt": "2026-05-10 11:18",
+          "operatorName": "陕西省中药材质检中心",
+          "operatorRole": "system",
+          "attachments": [{ "name": "板蓝根首检报告.pdf", "url": "#" }]
+        },
+        {
+          "id": "ev-0009-4",
+          "type": "storage",
+          "title": "进入风控临时库",
+          "description": "在复检结果出具前暂存风控库，禁止出库。",
+          "occurredAt": "2026-05-15 10:40",
+          "operatorName": "秦岭本草仓储中心",
+          "operatorRole": "grower"
+        }
+      ]
+    },
+    {
+      "id": "hb-0010",
+      "batchNo": "YM-2026-SX-DC-0556",
+      "traceCode": "YM-TRACE-2026-0010",
+      "herbName": "党参",
+      "category": "root",
+      "growerId": "g-taibaishan-daodi",
+      "growerName": "太白山道地药材基地",
+      "plantingStartDate": "2024-04-15",
+      "origin": {
+        "province": "陕西省",
+        "city": "宝鸡市",
+        "district": "太白县",
+        "address": "鹦鸽镇党参 GAP 基地北区"
+      },
+      "environment": "秦岭主脊太白山南麓，海拔约 1750m，年均温 8.2℃，棕色森林土",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "太白党参，两年生采收，肉厚味甘。",
+      "stage": "processing",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-03-05 09:30",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-04 15:22",
+      "events": [
+        {
+          "id": "ev-0010-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-03-05 09:30",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0010-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-03-06 10:00",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0010-3",
+          "type": "stageChange",
+          "title": "进入初加工",
+          "fromStage": "harvested",
+          "toStage": "processing",
+          "occurredAt": "2026-05-04 15:22",
+          "operatorName": "太白本草初加工厂",
+          "operatorRole": "processor"
+        }
+      ]
+    },
+    {
+      "id": "hb-0011",
+      "batchNo": "YM-2026-SX-LQ-0567",
+      "traceCode": "YM-TRACE-2026-0011",
+      "herbName": "连翘",
+      "category": "fruitSeed",
+      "growerId": "g-taibaishan-daodi",
+      "growerName": "太白山道地药材基地",
+      "plantingStartDate": "2019-05-10",
+      "origin": {
+        "province": "陕西省",
+        "city": "宝鸡市",
+        "district": "太白县",
+        "address": "桃川镇野生抚育连翘示范带"
+      },
+      "environment": "太白山中山带，海拔约 1500m，年均温 9.5℃，半阴坡",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "太白野生抚育连翘，秋采青翘，连翘苷含量优。",
+      "stage": "harvested",
+      "auditStatus": "approved",
+      "riskLevel": "low",
+      "createdAt": "2026-04-18 11:50",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-02 17:12",
+      "events": [
+        {
+          "id": "ev-0011-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-04-18 11:50",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0011-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-04-19 09:08",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0011-3",
+          "type": "stageChange",
+          "title": "采收完成",
+          "fromStage": "planting",
+          "toStage": "harvested",
+          "occurredAt": "2026-05-02 17:12",
+          "operatorName": "太白山道地药材基地",
+          "operatorRole": "grower"
+        }
+      ]
+    },
+    {
+      "id": "hb-0012",
+      "batchNo": "YM-2026-SX-WW-0578",
+      "traceCode": "YM-TRACE-2026-0012",
+      "herbName": "五味子",
+      "category": "fruitSeed",
+      "growerId": "g-taibaishan-daodi",
+      "growerName": "太白山道地药材基地",
+      "plantingStartDate": "2021-04-08",
+      "origin": {
+        "province": "陕西省",
+        "city": "宝鸡市",
+        "district": "眉县",
+        "address": "汤峪镇五味子林缘种植区"
+      },
+      "environment": "秦岭北麓，海拔约 1200m，年均温 10.6℃，腐殖质富集",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "秦岭北五味子（华中五味子近缘），果粒饱满。",
+      "stage": "shipped",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-02-28 10:08",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-10 08:30",
+      "events": [
+        {
+          "id": "ev-0012-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-02-28 10:08",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0012-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-03-01 08:50",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0012-3",
+          "type": "qcReport",
+          "title": "二次质检：合格",
+          "description": "五味子醇甲含量 0.45%，符合药典。",
+          "occurredAt": "2026-04-30 14:20",
+          "operatorName": "陕西省药品检验所",
+          "operatorRole": "system",
+          "attachments": [{ "name": "五味子复检报告.pdf", "url": "#" }]
+        },
+        {
+          "id": "ev-0012-4",
+          "type": "transport",
+          "title": "干货物流启程",
+          "occurredAt": "2026-05-10 08:30",
+          "operatorName": "秦岭物流",
+          "operatorRole": "processor"
+        }
+      ]
+    },
+    {
+      "id": "hb-0013",
+      "batchNo": "YM-2026-SX-TM-0589",
+      "traceCode": "YM-TRACE-2026-0013",
+      "herbName": "天麻",
+      "category": "root",
+      "growerId": "g-hanzhong-bencao",
+      "growerName": "汉中本草农业公司",
+      "plantingStartDate": "2024-03-22",
+      "origin": {
+        "province": "陕西省",
+        "city": "汉中市",
+        "district": "宁强县",
+        "address": "汉源镇天麻仿野生种植基地"
+      },
+      "environment": "秦巴山地，海拔约 1300m，年均温 12.9℃，菌材腐殖土",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "宁强仿野生天麻，与蜜环菌共生，已完成交易闭环。",
+      "stage": "sold",
+      "auditStatus": "approved",
+      "riskLevel": "normal",
+      "createdAt": "2026-01-18 09:48",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-18 16:00",
+      "events": [
+        {
+          "id": "ev-0013-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-01-18 09:48",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0013-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-01-19 10:30",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0013-3",
+          "type": "qcReport",
+          "title": "首检：合格",
+          "description": "天麻素含量 0.27%，符合药典。",
+          "occurredAt": "2026-03-22 14:00",
+          "operatorName": "陕西省中药材质检中心",
+          "operatorRole": "system",
+          "attachments": [{ "name": "天麻首检报告.pdf", "url": "#" }]
+        },
+        {
+          "id": "ev-0013-4",
+          "type": "transaction",
+          "title": "采购合同备案",
+          "description": "采购方：西安秦岭本草采购贸易有限公司。",
+          "occurredAt": "2026-05-18 16:00",
+          "operatorName": "陈靖轩",
+          "operatorRole": "buyer"
+        }
+      ]
+    },
+    {
+      "id": "hb-0014",
+      "batchNo": "YM-2026-SX-CZ-0590",
+      "traceCode": "YM-TRACE-2026-0014",
+      "herbName": "苍术",
+      "category": "root",
+      "growerId": "g-hanzhong-bencao",
+      "growerName": "汉中本草农业公司",
+      "plantingStartDate": "2025-09-18",
+      "origin": {
+        "province": "陕西省",
+        "city": "汉中市",
+        "district": "佛坪县",
+        "address": "陈家坝镇苍术示范田 C 区"
+      },
+      "environment": "秦岭中段南坡，海拔约 1450m，年均温 11.2℃，黄棕壤",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "佛坪苍术，因首批产地证明缺失被驳回，待补齐材料后重审。",
+      "stage": "planting",
+      "auditStatus": "rejected",
+      "riskLevel": "medium",
+      "createdAt": "2026-05-06 11:24",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-12 15:10",
+      "events": [
+        {
+          "id": "ev-0014-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-05-06 11:24",
+          "operatorName": "汉中本草农业公司",
+          "operatorRole": "grower",
+          "scopes": ["admin", "grower"]
+        },
+        {
+          "id": "ev-0014-2",
+          "type": "audit",
+          "title": "审核驳回",
+          "description": "产地证明文件缺失：请补充佛坪县农业农村局出具的种植登记证明。",
+          "occurredAt": "2026-05-12 15:10",
+          "operatorName": "李佳林",
+          "operatorRole": "admin",
+          "scopes": ["admin", "grower"]
+        }
+      ]
+    },
+    {
+      "id": "hb-0015",
+      "batchNo": "YM-2026-SX-HJ-0601",
+      "traceCode": "YM-TRACE-2026-0015",
+      "herbName": "黄精",
+      "category": "root",
+      "growerId": "g-hanzhong-bencao",
+      "growerName": "汉中本草农业公司",
+      "plantingStartDate": "2022-04-02",
+      "origin": {
+        "province": "陕西省",
+        "city": "安康市",
+        "district": "紫阳县",
+        "address": "向阳镇黄精林下种植带"
+      },
+      "environment": "秦巴山地南坡，海拔约 1000m，年均温 14.6℃，林下散射光",
+      "coverImageUrl": "/images/herbs/placeholder.svg",
+      "description": "紫阳林下黄精，三年生采挖，多糖含量优良。",
+      "stage": "warehousing",
+      "auditStatus": "approved",
+      "riskLevel": "low",
+      "createdAt": "2026-04-09 15:36",
+      "createdBy": "admin-lijialin",
+      "createdByRole": "admin",
+      "updatedAt": "2026-05-08 09:42",
+      "events": [
+        {
+          "id": "ev-0015-1",
+          "type": "create",
+          "title": "批次建档",
+          "occurredAt": "2026-04-09 15:36",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0015-2",
+          "type": "audit",
+          "title": "审核通过",
+          "occurredAt": "2026-04-10 09:18",
+          "operatorName": "李佳林",
+          "operatorRole": "admin"
+        },
+        {
+          "id": "ev-0015-3",
+          "type": "qcReport",
+          "title": "首检：合格",
+          "description": "黄精多糖含量 7.8%，符合内控指标。",
+          "occurredAt": "2026-04-28 13:40",
+          "operatorName": "陕西省中药材质检中心",
+          "operatorRole": "system",
+          "attachments": [{ "name": "黄精首检报告.pdf", "url": "#" }]
+        },
+        {
+          "id": "ev-0015-4",
+          "type": "stageChange",
+          "title": "进入仓储",
+          "fromStage": "harvested",
+          "toStage": "warehousing",
+          "occurredAt": "2026-05-08 09:42",
+          "operatorName": "汉中本草仓储中心",
+          "operatorRole": "grower"
+        }
+      ]
+    }
+  ]
+}

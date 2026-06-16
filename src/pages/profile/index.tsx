@@ -29,6 +29,7 @@ import { useAuth } from '../../hooks/useAuth'
 import {
   mockAdminProfileDetail,
   mockBuyerProfileDetail,
+  mockGrowerProfileDetail,
   type UserProfileDetail,
 } from '../../mock/user/profile'
 import type { UserRole } from '../../types/auth'
@@ -56,10 +57,12 @@ type PasswordFormValues = {
 
 /** 根据登录态选择对应资料 */
 function pickProfileDetail(role: UserRole): UserProfileDetail {
-  return role === 'buyer' ? mockBuyerProfileDetail : mockAdminProfileDetail
+  if (role === 'buyer') return mockBuyerProfileDetail
+  if (role === 'grower') return mockGrowerProfileDetail
+  return mockAdminProfileDetail
 }
 
-/** 路由级返回信息（与采购商 / 管理员端首页一致） */
+/** 路由级返回信息（与各端首页一致） */
 function backHomeForRole(role: UserRole): {
   path: string
   label: string
@@ -70,6 +73,13 @@ function backHomeForRole(role: UserRole): {
       path: '/buyer/herbs',
       label: '返回药材列表',
       breadcrumbRoot: { path: '/buyer/herbs', label: '采购商端' },
+    }
+  }
+  if (role === 'grower') {
+    return {
+      path: '/grower/dashboard',
+      label: '返回种植工作台',
+      breadcrumbRoot: { path: '/grower/dashboard', label: '种植商端' },
     }
   }
   return {
@@ -89,6 +99,7 @@ export default function ProfilePage() {
   const { session, logout } = useAuth()
   const role: UserRole = session?.role ?? 'admin'
   const isAdmin = role === 'admin'
+  const isGrower = role === 'grower'
   const [detail] = useState<UserProfileDetail>(pickProfileDetail(role))
   const [editOpen, setEditOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
@@ -142,10 +153,12 @@ export default function ProfilePage() {
     pwdForm.resetFields()
   }
 
-  /** Hero 副标题：admin → 工号；buyer → 所属公司 */
+  /** Hero 副标题：admin → 工号；grower → 所属合作社；buyer → 所属公司 */
   const heroSubtitle = isAdmin
     ? `工号 ${detail.employeeNo ?? '—'}`
-    : `所属公司 ${detail.company ?? '—'}`
+    : isGrower
+      ? `所属合作社 ${detail.company ?? '—'}`
+      : `所属公司 ${detail.company ?? '—'}`
 
   return (
     <Layout className="admin-dashboard profile-page" style={{ minHeight: '100vh' }}>
@@ -205,6 +218,33 @@ export default function ProfilePage() {
                 <Descriptions.Item label="职位">{detail.position ?? '—'}</Descriptions.Item>
                 <Descriptions.Item label="角色">{detail.roleLabel}</Descriptions.Item>
                 <Descriptions.Item label="最近登录时间">{detail.lastLoginAt}</Descriptions.Item>
+                <Descriptions.Item label="登录地点" span={2}>
+                  {detail.lastLoginLocation}
+                </Descriptions.Item>
+              </>
+            ) : isGrower ? (
+              <>
+                <Descriptions.Item label="姓名">{detail.displayName}</Descriptions.Item>
+                <Descriptions.Item label="种植户编号">{detail.customerNo ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="手机号">{phoneMasked}</Descriptions.Item>
+                <Descriptions.Item label="邮箱">{detail.email}</Descriptions.Item>
+                <Descriptions.Item label="所属合作社">{detail.company ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="入驻时间">{detail.cooperationSince ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="角色">{detail.roleLabel}</Descriptions.Item>
+                <Descriptions.Item label="最近登录时间">{detail.lastLoginAt}</Descriptions.Item>
+                <Descriptions.Item label="主营品类" span={2}>
+                  {detail.preferredCategories && detail.preferredCategories.length > 0 ? (
+                    <Space size={4} wrap>
+                      {detail.preferredCategories.map((c) => (
+                        <Tag key={c} color="green" bordered={false}>
+                          {c}
+                        </Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    '—'
+                  )}
+                </Descriptions.Item>
                 <Descriptions.Item label="登录地点" span={2}>
                   {detail.lastLoginLocation}
                 </Descriptions.Item>
@@ -285,10 +325,19 @@ export default function ProfilePage() {
           ) : (
             <Form.Item
               name="company"
-              label="所属公司"
-              rules={[{ required: true, message: '请输入所属公司或填写「个体」' }]}
+              label={isGrower ? '所属合作社' : '所属公司'}
+              rules={[
+                {
+                  required: true,
+                  message: isGrower ? '请输入所属合作社或基地' : '请输入所属公司或填写「个体」',
+                },
+              ]}
             >
-              <Input placeholder="如：西安XX中药材有限公司 或 个体" />
+              <Input
+                placeholder={
+                  isGrower ? '如：秦岭本草种植合作社' : '如：西安XX中药材有限公司 或 个体'
+                }
+              />
             </Form.Item>
           )}
           <Form.Item>

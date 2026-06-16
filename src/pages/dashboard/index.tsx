@@ -230,7 +230,7 @@ function DashboardInner() {
         <div className="admin-dashboard__brand">
           <MedicineBoxOutlined className="admin-dashboard__brand-icon" />
           <div className="admin-dashboard__brand-text">
-            <span className="admin-dashboard__brand-name">秦黛药谷</span>
+            <span className="admin-dashboard__brand-name">良木药谷</span>
             <span className="admin-dashboard__brand-sub">管理员控制台</span>
           </div>
         </div>
@@ -285,6 +285,7 @@ function DashboardInner() {
                     <div>
                       <Text strong>{session?.displayName ?? '—'}</Text>
                     </div>
+                
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       {session?.email ?? '—'}
                     </Text>

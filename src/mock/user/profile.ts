@@ -73,5 +73,19 @@ export const mockBuyerProfileDetail: UserProfileDetail = {
   lastLoginLocation: '陕西省西安市未央区 · 移动出口（近似）',
 }
 
+/** 种植商资料（演示账号：袁宇航 · 秦岭本草种植合作社） */
+export const mockGrowerProfileDetail: UserProfileDetail = {
+  displayName: '袁宇航',
+  phone: '13700001234',
+  email: '3253702912@qq.com',
+  roleLabel: '种植商',
+  company: '秦岭本草种植合作社',
+  customerNo: 'YM-G-2024005',
+  cooperationSince: '2024-03-20',
+  preferredCategories: ['根茎类', '全草类'],
+  lastLoginAt: '2026-05-28 08:12:40',
+  lastLoginLocation: '陕西省商洛市商州区 · 电信出口（近似）',
+}
+
 /** 兼容旧引用：等同于 mockAdminProfileDetail */
 export const mockUserProfileDetail = mockAdminProfileDetail

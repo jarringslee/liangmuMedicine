@@ -9,6 +9,11 @@ import ProfilePage from './pages/profile'
 import AdminHerbsPage from './pages/admin/herbs'
 import AdminHerbNewPage from './pages/admin/herbs/new'
 import BuyerHerbsPage from './pages/buyer/herbs'
+import GrowerDashboardPage from './pages/grower/dashboard'
+import GrowerBatchesPage from './pages/grower/batches'
+import GrowerBatchNewPage from './pages/grower/batches/new'
+import GrowerLogsPage from './pages/grower/logs'
+import GrowerLogNewPage from './pages/grower/logs/new'
 import TraceDetailPage from './pages/trace/Detail'
 
 const appTheme = {
@@ -86,6 +91,47 @@ export default function App() {
             element={
               <RequireAuth allowedRoles={['buyer']}>
                 <BuyerHerbsPage />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/grower/dashboard"
+            element={
+              <RequireAuth allowedRoles={['grower']}>
+                <GrowerDashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/grower/batches"
+            element={
+              <RequireAuth allowedRoles={['grower']}>
+                <GrowerBatchesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/grower/batches/new"
+            element={
+              <RequireAuth allowedRoles={['grower']}>
+                <GrowerBatchNewPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/grower/logs"
+            element={
+              <RequireAuth allowedRoles={['grower']}>
+                <GrowerLogsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/grower/logs/new"
+            element={
+              <RequireAuth allowedRoles={['grower']}>
+                <GrowerLogNewPage />
               </RequireAuth>
             }
           />

@@ -60,7 +60,7 @@ export const inboxMessages: InboxMessage[] = [
   {
     id: 'm5',
     channel: 'chat',
-    senderName: '蒿润园',
+    senderName: '蒿润圆',
     senderRole: '加工商',
     dateLabel: '2026-04-28 16:40',
     preview: '本批甘草初加工环节质检报告编号已同步至平台，请确认节点是否上链成功。',

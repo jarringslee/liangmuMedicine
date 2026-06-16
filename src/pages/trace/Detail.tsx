@@ -61,14 +61,18 @@ const { Title, Text, Paragraph } = Typography
 const ROLE_VISIBILITY: Record<UserRole, { showInternalFields: boolean; showAuditActions: boolean; showTimeline: boolean }> = {
   /** 管理员：完整字段、审核操作、页面内时间轴 */
   admin: { showInternalFields: true, showAuditActions: true, showTimeline: true },
+  /** 种植商：作为生产方可看完整字段与时间轴，但无审核操作 */
+  grower: { showInternalFields: true, showAuditActions: false, showTimeline: true },
+  /** 加工商：同上（预留） */
+  processor: { showInternalFields: true, showAuditActions: false, showTimeline: true },
   /** 采购商：精简字段、无审核、时间轴只在弹窗里看 */
   buyer: { showInternalFields: false, showAuditActions: false, showTimeline: false },
 }
 
 function backHomeForRole(role: UserRole): { path: string; label: string } {
-  return role === 'buyer'
-    ? { path: '/buyer/herbs', label: '返回药材列表' }
-    : { path: '/admin/herbs', label: '返回药材管理' }
+  if (role === 'buyer') return { path: '/buyer/herbs', label: '返回药材列表' }
+  if (role === 'grower') return { path: '/grower/dashboard', label: '返回种植工作台' }
+  return { path: '/admin/herbs', label: '返回药材管理' }
 }
 
 function formatOrigin(b: HerbBatch): string {
@@ -95,6 +99,12 @@ function collectAttachments(batch: HerbBatch, role: UserRole): AttachmentRow[] {
       occurredAt: e.occurredAt,
     })),
   )
+}
+
+/** 是否为可直接打开的真实附件地址（排除占位的 "#" / 空值） */
+function isRealAttachmentUrl(url: string): boolean {
+  if (!url || url === '#') return false
+  return /^(https?:|data:|blob:|\/)/.test(url)
 }
 
 export default function TraceDetailPage() {
@@ -458,26 +468,46 @@ function BatchView({
               />
             ) : (
               <div className="trace-detail__attach-list">
-                {attachments.map((a) => (
-                  <a
-                    key={a.url + a.name + a.occurredAt}
-                    href={a.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="trace-detail__attach-item"
-                  >
-                    <PaperClipOutlined className="trace-detail__attach-icon" />
-                    <div className="trace-detail__attach-body">
-                      <div className="trace-detail__attach-name">{a.name}</div>
-                      <div className="trace-detail__attach-meta">
-                        <Tag bordered={false}>{EVENT_TYPE_LABEL[a.eventType]}</Tag>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {a.eventTitle} · {a.occurredAt}
-                        </Text>
+                {attachments.map((a) => {
+                  const real = isRealAttachmentUrl(a.url)
+                  const body = (
+                    <>
+                      <PaperClipOutlined className="trace-detail__attach-icon" />
+                      <div className="trace-detail__attach-body">
+                        <div className="trace-detail__attach-name">{a.name}</div>
+                        <div className="trace-detail__attach-meta">
+                          <Tag bordered={false}>{EVENT_TYPE_LABEL[a.eventType]}</Tag>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {a.eventTitle} · {a.occurredAt}
+                          </Text>
+                        </div>
                       </div>
-                    </div>
-                  </a>
-                ))}
+                    </>
+                  )
+                  const key = a.url + a.name + a.occurredAt
+                  return real ? (
+                    <a
+                      key={key}
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="trace-detail__attach-item"
+                    >
+                      {body}
+                    </a>
+                  ) : (
+                    <button
+                      key={key}
+                      type="button"
+                      className="trace-detail__attach-item"
+                      onClick={() =>
+                        message.info('演示环境：该附件为示例占位，待接入文件存储后可下载查看')
+                      }
+                    >
+                      {body}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </Card>

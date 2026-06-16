@@ -6,7 +6,7 @@
  * - 所有方法均为 async，后续可无痛替换为真实 API
  */
 
-import type { AuditStatus, HerbBatch, HerbCategory, HerbOrigin, RiskLevel, Stage } from '../types/herb'
+import type { AuditStatus, BatchEvent, HerbBatch, HerbCategory, HerbOrigin, RiskLevel, Stage } from '../types/herb'
 
 const STORAGE_KEY = 'liangmu_herb_overrides'
 const DATA_URL = `${import.meta.env.BASE_URL}data/herb-batches.json`
@@ -106,20 +106,46 @@ export async function generateNextTraceCode(): Promise<string> {
   return `${TRACE_PREFIX}-${year}-${pad4(n)}`
 }
 
-/** 极简：基于产地省份与药材名生成 batchNo 风格的业务编号 */
+/** 省份 → GB 标准两字母码（用于纯 ASCII 批次号） */
+const PROVINCE_CODE: Record<string, string> = {
+  北京: 'BJ', 天津: 'TJ', 河北: 'HE', 山西: 'SX', 内蒙古: 'NM',
+  辽宁: 'LN', 吉林: 'JL', 黑龙江: 'HL', 上海: 'SH', 江苏: 'JS',
+  浙江: 'ZJ', 安徽: 'AH', 福建: 'FJ', 江西: 'JX', 山东: 'SD',
+  河南: 'HA', 湖北: 'HB', 湖南: 'HN', 广东: 'GD', 广西: 'GX',
+  海南: 'HI', 重庆: 'CQ', 四川: 'SC', 贵州: 'GZ', 云南: 'YN',
+  西藏: 'XZ', 陕西: 'SN', 甘肃: 'GS', 青海: 'QH', 宁夏: 'NX',
+  新疆: 'XJ', 香港: 'HK', 澳门: 'MO', 台湾: 'TW',
+}
+
+/** 药材类别 → 两字母码 */
+const CATEGORY_CODE: Record<HerbCategory, string> = {
+  root: 'RT',
+  wholeHerb: 'WH',
+  fruitSeed: 'FS',
+  flowerLeaf: 'FL',
+  bark: 'BK',
+  mineral: 'MN',
+  other: 'OT',
+}
+
+function toProvinceCode(province: string): string {
+  const hit = Object.keys(PROVINCE_CODE).find((k) => province.includes(k))
+  return hit ? PROVINCE_CODE[hit]! : 'XX'
+}
+
+/** 生成纯 ASCII 业务编号：YM-{年}-{省份码}-{类别码}-{序号}，如 YM-2026-SN-RT-0002 */
 export async function generateNextBatchNo(params: {
   origin: HerbOrigin
-  herbName: string
+  category: HerbCategory
 }): Promise<string> {
   const year = currentYear()
-  const provinceCode = params.origin.province.slice(0, 1).toUpperCase() + 'M'
-  const herbCode = params.herbName.slice(0, 2).toUpperCase()
+  const prov = toProvinceCode(params.origin.province)
+  const cat = CATEGORY_CODE[params.category] ?? 'OT'
+  const prefix = `YM-${year}-${prov}-${cat}-`
   const all = await listBatches()
-  /** 在同一年同省同药材内累加 */
-  const same = all.filter((b) =>
-    b.batchNo.startsWith(`YM-${year}-${provinceCode}-${herbCode}-`),
-  )
-  return `YM-${year}-${provinceCode}-${herbCode}-${pad4(same.length + 1)}`
+  /** 在同一年同省同类别内累加 */
+  const same = all.filter((b) => b.batchNo.startsWith(prefix))
+  return `${prefix}${pad4(same.length + 1)}`
 }
 
 export type NewBatchInput = {
@@ -156,7 +182,7 @@ function randomSuffix(): string {
 /** 新建批次：自动生成 id / batchNo / traceCode / 建档事件 */
 export async function addBatch(input: NewBatchInput): Promise<HerbBatch> {
   const traceCode = await generateNextTraceCode()
-  const batchNo = await generateNextBatchNo({ origin: input.origin, herbName: input.herbName })
+  const batchNo = await generateNextBatchNo({ origin: input.origin, category: input.category })
   const createdAt = nowDisplay()
 
   const batch: HerbBatch = {
@@ -225,6 +251,30 @@ export async function updateBatch(id: string, patch: Partial<HerbBatch>): Promis
 /** 仅更改审核状态（管理员审核 UI 用） */
 export async function setAuditStatus(id: string, status: AuditStatus): Promise<HerbBatch> {
   return updateBatch(id, { auditStatus: status })
+}
+
+export type NewBatchEventInput = Omit<BatchEvent, 'id'> & { id?: string }
+
+/** 向批次追加链路事件（种植日志、阶段变更等） */
+export async function addBatchEvent(batchId: string, input: NewBatchEventInput): Promise<HerbBatch> {
+  const batch = await getById(batchId)
+  if (!batch) throw new Error(`批次不存在：${batchId}`)
+
+  const event: BatchEvent = {
+    id: input.id ?? `ev-${Date.now()}-${randomSuffix()}`,
+    type: input.type,
+    title: input.title,
+    description: input.description,
+    occurredAt: input.occurredAt,
+    operatorName: input.operatorName,
+    operatorRole: input.operatorRole,
+    scopes: input.scopes,
+    fromStage: input.fromStage,
+    toStage: input.toStage,
+    attachments: input.attachments,
+  }
+
+  return updateBatch(batchId, { events: [...batch.events, event] })
 }
 
 /** 重置所有本地覆盖（开发时清空） */

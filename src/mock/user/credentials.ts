@@ -11,6 +11,9 @@ export type StaticAccount = {
   loginUsername: string
   password: string
   roleLabel: string
+  /** 种植商账号绑定的合作社（用于「只看自己的批次」） */
+  growerId?: string
+  growerName?: string
 }
 
 /** 静态演示账号（后续改为接口校验） */
@@ -35,6 +38,30 @@ export const staticAccounts: StaticAccount[] = [
     password: 'chenjingxuan123',
     roleLabel: '采购商',
   },
+  {
+    userId: 'grower-yuanyuhang',
+    loginRole: 'grower',
+    role: 'grower',
+    displayName: '袁宇航',
+    email: '3253702912@qq.com',
+    loginUsername: 'yuanyuhang',
+    password: 'yuanyuhang123',
+    roleLabel: '种植商',
+    growerId: 'g-qinling-bencao',
+    growerName: '秦岭本草种植合作社',
+  },
+  {
+    userId: 'grower-lijiaying',
+    loginRole: 'grower',
+    role: 'grower',
+    displayName: '李佳英',
+    email: '3101016138@qq.com',
+    loginUsername: 'lijiaying',
+    password: 'lijiaying123',
+    roleLabel: '种植商',
+    growerId: 'g-taibaishan-daodi',
+    growerName: '太白山道地药材基地',
+  },
 ]
 
 export function accountToSession(account: StaticAccount): AuthSession {
@@ -44,6 +71,9 @@ export function accountToSession(account: StaticAccount): AuthSession {
     displayName: account.displayName,
     email: account.email,
     roleLabel: account.roleLabel,
+    ...(account.growerId
+      ? { growerId: account.growerId, growerName: account.growerName }
+      : {}),
   }
 }
 
@@ -53,16 +83,25 @@ export function verifyStaticLogin(
   account: string,
   password: string,
 ): AuthSession | null {
-  const row = staticAccounts.find((a) => a.loginRole === loginRole)
-  if (!row || password !== row.password) return null
-
   const u = account.trim()
-  if (mode === 'username') {
-    return u === row.loginUsername ? accountToSession(row) : null
-  }
-  return u.toLowerCase() === row.email.toLowerCase() ? accountToSession(row) : null
+  /** 同一 Tab 可能有多个账号，需按账号+密码精确匹配 */
+  const row = staticAccounts.find((a) => {
+    if (a.loginRole !== loginRole) return false
+    return mode === 'username'
+      ? u === a.loginUsername
+      : u.toLowerCase() === a.email.toLowerCase()
+  })
+  if (!row || password !== row.password) return null
+  return accountToSession(row)
 }
 
 export function getDefaultHome(role: UserRole): string {
-  return role === 'buyer' ? '/buyer/herbs' : '/dashboard'
+  switch (role) {
+    case 'buyer':
+      return '/buyer/herbs'
+    case 'grower':
+      return '/grower/dashboard'
+    default:
+      return '/dashboard'
+  }
 }

@@ -8,6 +8,7 @@ import {
   Flex,
   Form,
   Input,
+  InputNumber,
   Layout,
   Result,
   Select,
@@ -18,30 +19,34 @@ import {
   theme,
 } from 'antd'
 import type { UploadFile } from 'antd'
+import dayjs, { type Dayjs } from 'dayjs'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeftOutlined,
+  CheckCircleOutlined,
   EyeOutlined,
-  FileTextOutlined,
   ReloadOutlined,
   UnorderedListOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import dayjs, { type Dayjs } from 'dayjs'
 import { useAuth } from '../../../hooks/useAuth'
-import { addBatchEvent } from '../../../services/herbStorage'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import { recordHarvest } from '../../../services/herbStorage'
+import { STAGE_LABEL } from '../../../types/herb'
 import '../../dashboard/index.less'
-import '../../admin/herbs/herbs.less'
+import '../logs/logs.less'
+import './harvest.less'
 
 const { Header, Content } = Layout
 const { Text, Title } = Typography
 
 type FormValues = {
   batchId: string
-  occurredAt: Dayjs
-  title: string
-  description: string
+  harvestDate: Dayjs
+  yieldKg: number
+  plotArea?: string
+  harvesterName?: string
+  note?: string
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -53,11 +58,9 @@ function readAsDataUrl(file: File): Promise<string> {
   })
 }
 
-function formatOccurredAt(d: Dayjs): string {
-  return d.format('YYYY-MM-DD HH:mm')
-}
+const MAX_PHOTOS = 4
 
-export default function GrowerLogNewPage() {
+export default function GrowerHarvestNewPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -73,7 +76,7 @@ export default function GrowerLogNewPage() {
   const growerId = session?.growerId
   const growerName = session?.growerName ?? session?.displayName
 
-  /** 可写日志的批次：自己的 + 种植中 + 未驳回 */
+  /** 可采收的批次：自己的 + 种植中 + 未驳回 */
   const eligibleBatches = useMemo(
     () =>
       growerId
@@ -102,15 +105,16 @@ export default function GrowerLogNewPage() {
 
   const resetAll = () => {
     form.resetFields()
-    form.setFieldValue('occurredAt', dayjs())
+    form.setFieldValue('harvestDate', dayjs())
+    form.setFieldValue('harvesterName', growerName)
     setPhotoUrls([])
     setFileList([])
     setSavedTraceCode(null)
   }
 
   const handlePhotoUpload = async (file: File) => {
-    if (photoUrls.length >= 4) {
-      message.warning('最多上传 4 张现场照片')
+    if (photoUrls.length >= MAX_PHOTOS) {
+      message.warning(`最多上传 ${MAX_PHOTOS} 张现场照片`)
       return false
     }
     try {
@@ -120,7 +124,6 @@ export default function GrowerLogNewPage() {
         ...prev,
         { uid: `${file.name}-${Date.now()}`, name: file.name, status: 'done' } as UploadFile,
       ])
-      message.success('照片已添加（演示环境存于本地）')
     } catch {
       message.error('照片读取失败')
     }
@@ -129,35 +132,39 @@ export default function GrowerLogNewPage() {
 
   const onFinish = async (values: FormValues) => {
     if (!growerId || !growerName) {
-      message.error('当前账号未绑定合作社，无法写日志')
+      message.error('当前账号未绑定合作社，无法采收登记')
       return
     }
-
     const batch = eligibleBatches.find((b) => b.id === values.batchId)
     if (!batch) {
-      message.error('所选批次不可写日志（需为种植中且未驳回）')
+      message.error('所选批次不可采收（需为种植中且未驳回）')
       return
     }
 
     setSubmitting(true)
     try {
-      await addBatchEvent(batch.id, {
-        type: 'note',
-        title: values.title.trim(),
-        description: values.description.trim(),
-        occurredAt: formatOccurredAt(values.occurredAt),
-        operatorName: growerName,
-        operatorRole: 'grower',
-        attachments:
-          photoUrls.length > 0
-            ? photoUrls.map((url, i) => ({
-                name: `现场照片${i + 1}.jpg`,
-                url,
-              }))
-            : undefined,
-      })
+      await recordHarvest(
+        batch.id,
+        {
+          harvestDate: values.harvestDate.format('YYYY-MM-DD'),
+          yieldKg: values.yieldKg,
+          plotArea: values.plotArea?.trim() || undefined,
+          harvesterName: values.harvesterName?.trim() || undefined,
+          note: values.note?.trim() || undefined,
+          photos: photoUrls.map((url, i) => ({
+            name: `采收现场${i + 1}.jpg`,
+            url,
+          })),
+        },
+        {
+          userId: session?.userId ?? '',
+          displayName: growerName,
+          growerId,
+          growerName,
+        },
+      )
       setSavedTraceCode(batch.traceCode)
-      message.success('种植日志已保存')
+      message.success('采收登记已保存，阶段已流转至「已采收」')
     } catch (e) {
       message.error(`保存失败：${(e as Error).message}`)
     } finally {
@@ -166,19 +173,19 @@ export default function GrowerLogNewPage() {
   }
 
   return (
-    <Layout className="admin-dashboard">
+    <Layout className="admin-dashboard grower-harvest">
       <Header className="admin-dashboard__header">
         <Flex align="center" justify="space-between" style={{ width: '100%' }}>
           <Space size="middle" wrap>
-            <FileTextOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
+            <CheckCircleOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
             <Title level={4} style={{ margin: 0 }}>
-              写种植日志
+              采收登记
             </Title>
           </Space>
-          <Link to="/grower/logs">
+          <Link to="/grower/harvest">
             <Space>
               <ArrowLeftOutlined />
-              返回日志列表
+              返回采收记录
             </Space>
           </Link>
         </Flex>
@@ -189,8 +196,8 @@ export default function GrowerLogNewPage() {
           style={{ marginBottom: 16 }}
           items={[
             { title: <Link to="/grower/dashboard">种植商端</Link> },
-            { title: <Link to="/grower/logs">种植日志</Link> },
-            { title: <span style={{ color: token.colorText }}>写日志</span> },
+            { title: <Link to="/grower/harvest">采收记录</Link> },
+            { title: <span style={{ color: token.colorText }}>登记</span> },
           ]}
         />
 
@@ -198,8 +205,8 @@ export default function GrowerLogNewPage() {
           <Card bordered={false}>
             <Result
               status="success"
-              title="种植日志已保存"
-              subTitle="记录已写入批次溯源时间线，可在详情页查看完整链路。"
+              title="采收登记已完成"
+              subTitle="批次阶段已从「种植中」流转到「已采收」，可在溯源详情中查看完整链路。"
               extra={
                 <Space wrap>
                   <Button
@@ -212,13 +219,13 @@ export default function GrowerLogNewPage() {
                     查看溯源详情
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={resetAll}>
-                    继续写日志
+                    继续登记
                   </Button>
                   <Button
                     icon={<UnorderedListOutlined />}
-                    onClick={() => navigate('/grower/logs')}
+                    onClick={() => navigate('/grower/harvest')}
                   >
-                    返回日志列表
+                    返回采收记录
                   </Button>
                 </Space>
               }
@@ -229,22 +236,22 @@ export default function GrowerLogNewPage() {
             <Alert
               type="info"
               showIcon
-              style={{ marginBottom: 24 }}
-              message={`以 ${growerName ?? '我的合作社'} 名义记录种植过程`}
-              description="仅「种植中」且未驳回的批次可写日志。日志会追加到该批次的溯源时间线。"
+              style={{ marginBottom: 16 }}
+              message={`以 ${growerName ?? '我的合作社'} 名义进行采收登记`}
+              description={`仅「种植中」且未驳回的批次可采收。提交后批次阶段将自动流转到「${STAGE_LABEL.harvested}」，并写入溯源时间轴。`}
             />
 
             {eligibleBatches.length === 0 ? (
               <Result
                 status="info"
-                title="暂无可写日志的批次"
-                subTitle="请先新建批次并确保处于「种植中」阶段，或等待管理员审核（已驳回批次需整改后再记录）。"
+                title="暂无可采收的批次"
+                subTitle="请先新建批次并确保处于「种植中」阶段（已驳回批次需整改后再采收）。"
                 extra={
                   <Space>
                     <Button type="primary" onClick={() => navigate('/grower/batches/new')}>
                       新建批次
                     </Button>
-                    <Button onClick={() => navigate('/grower/batches')}>我的批次</Button>
+                    <Button onClick={() => navigate('/grower/harvest')}>采收记录</Button>
                   </Space>
                 }
               />
@@ -253,13 +260,13 @@ export default function GrowerLogNewPage() {
                 form={form}
                 layout="vertical"
                 onFinish={onFinish}
-                initialValues={{ occurredAt: dayjs() }}
+                initialValues={{ harvestDate: dayjs(), harvesterName: growerName }}
                 style={{ maxWidth: 640 }}
               >
                 <Form.Item
                   name="batchId"
                   label="关联批次"
-                  rules={[{ required: true, message: '请选择要记录的批次' }]}
+                  rules={[{ required: true, message: '请选择要采收的批次' }]}
                 >
                   <Select
                     placeholder="选择药材批次"
@@ -270,45 +277,61 @@ export default function GrowerLogNewPage() {
                 </Form.Item>
 
                 <Form.Item
-                  name="occurredAt"
-                  label="记录时间"
-                  rules={[{ required: true, message: '请选择记录时间' }]}
+                  name="harvestDate"
+                  label="采收日期"
+                  rules={[{ required: true, message: '请选择采收日期' }]}
                 >
                   <DatePicker
-                    showTime={{ format: 'HH:mm' }}
-                    format="YYYY-MM-DD HH:mm"
+                    format="YYYY-MM-DD"
                     style={{ width: '100%' }}
+                    disabledDate={(d) => d && d.isAfter(dayjs().endOf('day'))}
                   />
                 </Form.Item>
 
                 <Form.Item
-                  name="title"
-                  label="日志标题"
+                  name="yieldKg"
+                  label="采收数量 (kg)"
                   rules={[
-                    { required: true, message: '请填写标题' },
-                    { max: 40, message: '标题不超过 40 字' },
+                    { required: true, message: '请填写采收数量' },
+                    {
+                      validator: (_, v) =>
+                        v === undefined || v === null || v <= 0
+                          ? Promise.reject(new Error('采收数量必须大于 0'))
+                          : Promise.resolve(),
+                    },
                   ]}
                 >
-                  <Input placeholder="如：苗期巡查、施肥记录、病虫害防治" maxLength={40} showCount />
+                  <InputNumber<number>
+                    min={0}
+                    step={0.1}
+                    precision={2}
+                    style={{ width: '100%' }}
+                    placeholder="如：120.50"
+                  />
+                </Form.Item>
+
+                <Form.Item name="plotArea" label="采收地块（可选）">
+                  <Input placeholder="如：A 区北坡 3 号地" maxLength={60} />
+                </Form.Item>
+
+                <Form.Item name="harvesterName" label="采收人员（可选）">
+                  <Input placeholder="留空默认当前账号" maxLength={40} />
                 </Form.Item>
 
                 <Form.Item
-                  name="description"
-                  label="详细内容"
-                  rules={[
-                    { required: true, message: '请填写详细内容' },
-                    { max: 500, message: '内容不超过 500 字' },
-                  ]}
+                  name="note"
+                  label="备注（可选）"
+                  rules={[{ max: 300, message: '备注不超过 300 字' }]}
                 >
                   <Input.TextArea
-                    rows={5}
-                    placeholder="记录现场情况：出苗率、长势、天气、用药施肥、异常现象等"
-                    maxLength={500}
+                    rows={3}
+                    placeholder="采收批次、品质初评、天气、注意事项等"
+                    maxLength={300}
                     showCount
                   />
                 </Form.Item>
 
-                <Form.Item label="现场照片（可选，最多 4 张）">
+                <Form.Item label={`现场照片（可选，最多 ${MAX_PHOTOS} 张）`}>
                   <Upload
                     accept="image/*"
                     fileList={fileList}
@@ -322,7 +345,7 @@ export default function GrowerLogNewPage() {
                     }}
                     listType="picture-card"
                   >
-                    {fileList.length < 4 ? (
+                    {fileList.length < MAX_PHOTOS ? (
                       <div>
                         <UploadOutlined />
                         <div style={{ marginTop: 8 }}>上传照片</div>
@@ -330,16 +353,16 @@ export default function GrowerLogNewPage() {
                     ) : null}
                   </Upload>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    演示环境以 base64 存于本地，正式接入后可上传至对象存储
+                    演示环境以 base64 存于本地，阶段将流转至「{STAGE_LABEL.harvested}」
                   </Text>
                 </Form.Item>
 
                 <Form.Item style={{ marginBottom: 0 }}>
                   <Space>
                     <Button type="primary" htmlType="submit" loading={submitting}>
-                      保存日志
+                      提交采收登记
                     </Button>
-                    <Button onClick={() => navigate('/grower/logs')}>取消</Button>
+                    <Button onClick={() => navigate('/grower/harvest')}>取消</Button>
                   </Space>
                 </Form.Item>
               </Form>

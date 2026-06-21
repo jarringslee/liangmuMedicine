@@ -21,13 +21,11 @@ import {
   AppstoreOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  CloseCircleOutlined,
-  EnvironmentOutlined,
   EyeOutlined,
-  FileTextOutlined,
+  ExperimentOutlined,
   LogoutOutlined,
   MedicineBoxOutlined,
-  PlusOutlined,
+  ToolOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -36,7 +34,7 @@ import { useHerbBatches } from '../../../hooks/useHerbBatches'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import type { HerbBatch } from '../../../types/herb'
 import '../../dashboard/index.less'
-import './grower.less'
+import './processor.less'
 
 const { Header, Content } = Layout
 const { Title, Text, Paragraph } = Typography
@@ -45,33 +43,34 @@ function formatOrigin(b: HerbBatch): string {
   return [b.origin.province, b.origin.city, b.origin.district].filter(Boolean).join(' · ')
 }
 
-export default function GrowerDashboardPage() {
+export default function ProcessorDashboardPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
   const { data, loading } = useHerbBatches()
 
-  const growerId = session?.growerId
-
-  /** 只看自己合作社的批次 */
-  const mine = useMemo(
-    () => (growerId ? data.filter((b) => b.growerId === growerId) : []),
-    [data, growerId],
+  /**
+   * 第一版 processor 端暂不做分配关系：
+   * harvested 视为待接收，processing 视为加工中，warehousing 视为已完成/待平台复核。
+   */
+  const processable = useMemo(
+    () => data.filter((b) => ['harvested', 'processing', 'warehousing'].includes(b.stage)),
+    [data],
   )
 
   const stats = useMemo(
     () => ({
-      total: mine.length,
-      pending: mine.filter((b) => b.auditStatus === 'pending').length,
-      approved: mine.filter((b) => b.auditStatus === 'approved').length,
-      rejected: mine.filter((b) => b.auditStatus === 'rejected').length,
+      pendingReceive: processable.filter((b) => b.stage === 'harvested').length,
+      processing: processable.filter((b) => b.stage === 'processing').length,
+      warehousing: processable.filter((b) => b.stage === 'warehousing').length,
+      total: processable.length,
     }),
-    [mine],
+    [processable],
   )
 
   const recent = useMemo(
-    () => [...mine].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
-    [mine],
+    () => [...processable].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
+    [processable],
   )
 
   const handleLogout = () => {
@@ -80,13 +79,13 @@ export default function GrowerDashboardPage() {
   }
 
   return (
-    <Layout className="admin-dashboard grower-dashboard">
+    <Layout className="admin-dashboard processor-dashboard">
       <Header className="admin-dashboard__header">
         <Flex align="center" justify="space-between" style={{ width: '100%' }}>
           <Space size="middle" wrap>
             <MedicineBoxOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
             <Title level={4} style={{ margin: 0 }}>
-              良木药谷 · 种植商端
+              良木药谷 · 加工商端
             </Title>
           </Space>
           <Dropdown
@@ -111,7 +110,7 @@ export default function GrowerDashboardPage() {
             placement="bottomRight"
             trigger={['click']}
           >
-            <button type="button" className="grower-dashboard__user-trigger">
+            <button type="button" className="processor-dashboard__user-trigger">
               <Space>
                 <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
                 <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
@@ -119,7 +118,7 @@ export default function GrowerDashboardPage() {
                     <Text strong>{session?.displayName ?? '—'}</Text>
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {session?.growerName ?? session?.roleLabel ?? '种植商'}
+                    {session?.processorName ?? session?.roleLabel ?? '加工商'}
                   </Text>
                 </div>
               </Space>
@@ -132,40 +131,31 @@ export default function GrowerDashboardPage() {
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { title: '种植商端' },
-            { title: <span style={{ color: token.colorText }}>种植工作台</span> },
+            { title: '加工商端' },
+            { title: <span style={{ color: token.colorText }}>加工工作台</span> },
           ]}
         />
 
-        <div className="grower-dashboard__hero">
+        <div className="processor-dashboard__hero">
           <div>
             <Title level={3} style={{ marginBottom: 8 }}>
-              欢迎，{session?.displayName ?? '种植商'}
+              欢迎，{session?.displayName ?? '加工商'}
             </Title>
             <Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
-              这里是 <strong>{session?.growerName ?? '我的合作社'}</strong> 的种植工作台。
-              你可以建档新批次、登记种植与采收信息，提交后将进入管理员审核流程。
+              这里是 <strong>{session?.processorName ?? '我的加工厂'}</strong> 的加工工作台。
+              当前先展示已采收、加工中与入库阶段批次，后续会接入接收、工序录入与质检报告。
             </Paragraph>
           </div>
-          <div className="grower-dashboard__hero-actions">
+          <div className="processor-dashboard__hero-actions">
             <Button
               type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate('/grower/batches/new')}
+              icon={<AppstoreOutlined />}
+              onClick={() => navigate('/processor/batches')}
             >
-              新建批次
+              加工批次
             </Button>
-            <Button icon={<AppstoreOutlined />} onClick={() => navigate('/grower/batches')}>
-              我的批次
-            </Button>
-            <Button icon={<FileTextOutlined />} onClick={() => navigate('/grower/logs')}>
-              种植日志
-            </Button>
-            <Button
-              icon={<CheckCircleOutlined />}
-              onClick={() => navigate('/grower/harvest')}
-            >
-              采收登记
+            <Button icon={<ToolOutlined />} disabled>
+              工序录入（下一步）
             </Button>
           </div>
         </div>
@@ -174,17 +164,8 @@ export default function GrowerDashboardPage() {
           <Col xs={12} md={6}>
             <Card bordered={false}>
               <Statistic
-                title="我的批次"
-                value={stats.total}
-                prefix={<AppstoreOutlined style={{ color: token.colorPrimary }} />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} md={6}>
-            <Card bordered={false}>
-              <Statistic
-                title="待审核"
-                value={stats.pending}
+                title="待接收"
+                value={stats.pendingReceive}
                 prefix={<ClockCircleOutlined style={{ color: token.colorWarning }} />}
               />
             </Card>
@@ -192,8 +173,17 @@ export default function GrowerDashboardPage() {
           <Col xs={12} md={6}>
             <Card bordered={false}>
               <Statistic
-                title="已通过"
-                value={stats.approved}
+                title="加工中"
+                value={stats.processing}
+                prefix={<ToolOutlined style={{ color: token.colorPrimary }} />}
+              />
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card bordered={false}>
+              <Statistic
+                title="已入库"
+                value={stats.warehousing}
                 prefix={<CheckCircleOutlined style={{ color: token.colorSuccess }} />}
               />
             </Card>
@@ -201,20 +191,20 @@ export default function GrowerDashboardPage() {
           <Col xs={12} md={6}>
             <Card bordered={false}>
               <Statistic
-                title="已驳回"
-                value={stats.rejected}
-                prefix={<CloseCircleOutlined style={{ color: token.colorError }} />}
+                title="可处理批次"
+                value={stats.total}
+                prefix={<ExperimentOutlined style={{ color: token.colorPrimary }} />}
               />
             </Card>
           </Col>
         </Row>
 
         <Card
-          title="最近批次"
+          title="最近可处理批次"
           bordered={false}
           style={{ marginTop: 16 }}
           extra={
-            <Button type="link" onClick={() => navigate('/grower/batches')}>
+            <Button type="link" onClick={() => navigate('/processor/batches')}>
               查看全部
             </Button>
           }
@@ -224,10 +214,7 @@ export default function GrowerDashboardPage() {
               <Spin />
             </Flex>
           ) : recent.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有批次，点击「新建批次」开始建档"
-            />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可处理批次" />
           ) : (
             <List
               itemLayout="horizontal"
@@ -251,7 +238,7 @@ export default function GrowerDashboardPage() {
                   <List.Item.Meta
                     avatar={
                       <span
-                        className="grower-dashboard__thumb"
+                        className="processor-dashboard__thumb"
                         aria-label={b.herbName}
                         style={{
                           backgroundImage: `url(${b.coverImageUrl ?? '/images/herbs/placeholder.svg'})`,
@@ -268,9 +255,7 @@ export default function GrowerDashboardPage() {
                     }
                     description={
                       <Space wrap size={16}>
-                        <Text type="secondary">
-                          <EnvironmentOutlined /> {formatOrigin(b)}
-                        </Text>
+                        <Text type="secondary">{formatOrigin(b)}</Text>
                         <Text type="secondary">{b.batchNo}</Text>
                         <Text type="secondary">更新于 {b.updatedAt}</Text>
                       </Space>

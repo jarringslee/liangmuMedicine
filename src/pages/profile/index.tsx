@@ -28,8 +28,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import {
   mockAdminProfileDetail,
+  mockAdminZhengProfileDetail,
   mockBuyerProfileDetail,
+  mockBuyerCaoProfileDetail,
   mockGrowerProfileDetail,
+  mockProcessorProfileDetail,
   type UserProfileDetail,
 } from '../../mock/user/profile'
 import type { UserRole } from '../../types/auth'
@@ -55,10 +58,13 @@ type PasswordFormValues = {
   confirmPassword: string
 }
 
-/** 根据登录态选择对应资料 */
-function pickProfileDetail(role: UserRole): UserProfileDetail {
+/** 根据登录态选择对应资料（多账号时用 userId 精确匹配兜底 role） */
+function pickProfileDetail(role: UserRole, userId: string): UserProfileDetail {
+  if (userId === 'admin-zhengwukai') return mockAdminZhengProfileDetail
+  if (userId === 'buyer-caomoran') return mockBuyerCaoProfileDetail
   if (role === 'buyer') return mockBuyerProfileDetail
   if (role === 'grower') return mockGrowerProfileDetail
+  if (role === 'processor') return mockProcessorProfileDetail
   return mockAdminProfileDetail
 }
 
@@ -82,6 +88,13 @@ function backHomeForRole(role: UserRole): {
       breadcrumbRoot: { path: '/grower/dashboard', label: '种植商端' },
     }
   }
+  if (role === 'processor') {
+    return {
+      path: '/processor/dashboard',
+      label: '返回加工工作台',
+      breadcrumbRoot: { path: '/processor/dashboard', label: '加工商端' },
+    }
+  }
   return {
     path: '/dashboard',
     label: '返回数据概览',
@@ -100,7 +113,8 @@ export default function ProfilePage() {
   const role: UserRole = session?.role ?? 'admin'
   const isAdmin = role === 'admin'
   const isGrower = role === 'grower'
-  const [detail] = useState<UserProfileDetail>(pickProfileDetail(role))
+  const isProcessor = role === 'processor'
+  const [detail] = useState<UserProfileDetail>(pickProfileDetail(role, session?.userId ?? ''))
   const [editOpen, setEditOpen] = useState(false)
   const [pwdOpen, setPwdOpen] = useState(false)
   const [editForm] = Form.useForm<EditFormValues>()
@@ -153,7 +167,7 @@ export default function ProfilePage() {
     pwdForm.resetFields()
   }
 
-  /** Hero 副标题：admin → 工号；grower → 所属合作社；buyer → 所属公司 */
+  /** Hero 副标题：admin → 工号；grower → 所属合作社；buyer/processor → 所属公司 */
   const heroSubtitle = isAdmin
     ? `工号 ${detail.employeeNo ?? '—'}`
     : isGrower
@@ -249,6 +263,20 @@ export default function ProfilePage() {
                   {detail.lastLoginLocation}
                 </Descriptions.Item>
               </>
+            ) : isProcessor ? (
+              <>
+                <Descriptions.Item label="姓名">{detail.displayName}</Descriptions.Item>
+                <Descriptions.Item label="加工商编号">{detail.customerNo ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="手机号">{phoneMasked}</Descriptions.Item>
+                <Descriptions.Item label="邮箱">{detail.email}</Descriptions.Item>
+                <Descriptions.Item label="所属工厂">{detail.company ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="合作起始">{detail.cooperationSince ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label="角色">{detail.roleLabel}</Descriptions.Item>
+                <Descriptions.Item label="最近登录时间">{detail.lastLoginAt}</Descriptions.Item>
+                <Descriptions.Item label="登录地点" span={2}>
+                  {detail.lastLoginLocation}
+                </Descriptions.Item>
+              </>
             ) : (
               <>
                 <Descriptions.Item label="姓名">{detail.displayName}</Descriptions.Item>
@@ -322,6 +350,14 @@ export default function ProfilePage() {
                 <Input />
               </Form.Item>
             </>
+          ) : isProcessor ? (
+            <Form.Item
+              name="company"
+              label="所属工厂"
+              rules={[{ required: true, message: '请输入所属工厂名称' }]}
+            >
+              <Input placeholder="如：秦岭本草加工厂" />
+            </Form.Item>
           ) : (
             <Form.Item
               name="company"

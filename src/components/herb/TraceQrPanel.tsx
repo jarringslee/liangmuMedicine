@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { Button, Space, Typography, message } from 'antd'
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons'
 import { QRCodeCanvas } from 'qrcode.react'
+import { buildTraceUrl } from '../../utils/traceUrl'
 
 const { Text } = Typography
 
@@ -13,12 +14,6 @@ type Props = {
   compact?: boolean
   /** 自定义说明文案 */
   description?: string
-}
-
-export function buildTraceUrl(traceCode: string): string {
-  if (typeof window === 'undefined') return `/trace/${traceCode}`
-  const base = window.location.origin
-  return `${base}/trace/${traceCode}`
 }
 
 /** 共用二维码面板：渲染真二维码，支持复制链接 / 下载 PNG */

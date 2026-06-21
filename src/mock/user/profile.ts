@@ -60,6 +60,19 @@ export const mockAdminProfileDetail: UserProfileDetail = {
   lastLoginLocation: '陕西省西安市雁塔区 · 联通出口（近似）',
 }
 
+/** 管理员资料（演示账号：郑武凯） */
+export const mockAdminZhengProfileDetail: UserProfileDetail = {
+  displayName: '郑武凯',
+  employeeNo: 'YM-A-2024002',
+  phone: '13900001234',
+  email: '516136122@qq.com',
+  department: '运营管理部',
+  position: '运营主管',
+  roleLabel: '管理员',
+  lastLoginAt: '2026-06-10 16:28:05',
+  lastLoginLocation: '陕西省西安市未央区 · 移动出口（近似）',
+}
+
 export const mockBuyerProfileDetail: UserProfileDetail = {
   displayName: '陈靖轩',
   phone: '13468636970',
@@ -71,6 +84,20 @@ export const mockBuyerProfileDetail: UserProfileDetail = {
   preferredCategories: ['根茎类', '果实种子类', '全草类'],
   lastLoginAt: '2026-05-22 21:18:35',
   lastLoginLocation: '陕西省西安市未央区 · 移动出口（近似）',
+}
+
+/** 采购商资料（演示账号：曹默然 · 个体） */
+export const mockBuyerCaoProfileDetail: UserProfileDetail = {
+  displayName: '曹默然',
+  phone: '13500006789',
+  email: '3072757348@qq.com',
+  roleLabel: '采购商',
+  company: '个体',
+  customerNo: 'YM-B-2025001',
+  cooperationSince: '2025-03-01',
+  preferredCategories: ['根茎类', '花叶类'],
+  lastLoginAt: '2026-06-15 10:05:22',
+  lastLoginLocation: '陕西省商洛市商州区 · 电信出口（近似）',
 }
 
 /** 种植商资料（演示账号：袁宇航 · 秦岭本草种植合作社） */
@@ -85,6 +112,19 @@ export const mockGrowerProfileDetail: UserProfileDetail = {
   preferredCategories: ['根茎类', '全草类'],
   lastLoginAt: '2026-05-28 08:12:40',
   lastLoginLocation: '陕西省商洛市商州区 · 电信出口（近似）',
+}
+
+/** 加工商资料（演示账号：蒿润圆 · 秦岭本草加工厂） */
+export const mockProcessorProfileDetail: UserProfileDetail = {
+  displayName: '蒿润圆',
+  phone: '13800005678',
+  email: '2264523868@qq.com',
+  roleLabel: '加工商',
+  company: '秦岭本草加工厂',
+  customerNo: 'YM-P-2025001',
+  cooperationSince: '2025-01-10',
+  lastLoginAt: '2026-06-18 14:32:11',
+  lastLoginLocation: '陕西省西安市雁塔区 · 移动出口（近似）',
 }
 
 /** 兼容旧引用：等同于 mockAdminProfileDetail */

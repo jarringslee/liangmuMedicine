@@ -7,6 +7,7 @@
  */
 
 import type { AuditStatus, BatchEvent, HerbBatch, HerbCategory, HerbOrigin, RiskLevel, Stage } from '../types/herb'
+import { STAGE_LABEL } from '../types/herb'
 
 const STORAGE_KEY = 'liangmu_herb_overrides'
 const DATA_URL = `${import.meta.env.BASE_URL}data/herb-batches.json`
@@ -275,6 +276,114 @@ export async function addBatchEvent(batchId: string, input: NewBatchEventInput):
   }
 
   return updateBatch(batchId, { events: [...batch.events, event] })
+}
+
+/**
+ * 阶段流转的合法下一阶段
+ * planting → harvested → processing → warehousing → shipped → sold
+ * 任意阶段都允许「驳回后回到 planting」由审核路径处理
+ */
+export const STAGE_NEXT: Record<Stage, Stage | null> = {
+  planting: 'harvested',
+  harvested: 'processing',
+  processing: 'warehousing',
+  warehousing: 'shipped',
+  shipped: 'sold',
+  sold: null,
+}
+
+/** 通用阶段流转：写入 toStage 事件 + 更新 batch.stage */
+export async function setStage(
+  batchId: string,
+  toStage: Stage,
+  options: { operatorName: string; operatorRole: BatchEvent['operatorRole']; note?: string },
+): Promise<HerbBatch> {
+  const batch = await getById(batchId)
+  if (!batch) throw new Error(`批次不存在：${batchId}`)
+
+  if (batch.stage === toStage) {
+    throw new Error(`批次已处于「${STAGE_LABEL[toStage]}」，无需变更`)
+  }
+
+  return addBatchEvent(batchId, {
+    type: 'stageChange',
+    title: `阶段变更：${STAGE_LABEL[batch.stage]} → ${STAGE_LABEL[toStage]}`,
+    description: options.note,
+    occurredAt: nowDisplay(),
+    operatorName: options.operatorName,
+    operatorRole: options.operatorRole,
+    fromStage: batch.stage,
+    toStage,
+  }).then(() => updateBatch(batchId, { stage: toStage }))
+}
+
+export type HarvestInput = {
+  /** 采收日期 YYYY-MM-DD */
+  harvestDate: string
+  /** 采收数量（kg），必填 */
+  yieldKg: number
+  /** 采收地块，可选 */
+  plotArea?: string
+  /** 采收人员，可选，默认登录人 */
+  harvesterName?: string
+  /** 备注，可选 */
+  note?: string
+  /** 现场照片，最多 4 张，base64 */
+  photos?: { name: string; url: string }[]
+}
+
+/**
+ * 采收登记：写入一条 harvest 事件 + 流转阶段到 harvested
+ * 业务约束：仅 planting 阶段可触发；驳回状态不可触发。
+ */
+export async function recordHarvest(
+  batchId: string,
+  input: HarvestInput,
+  operator: { userId: string; displayName: string; growerId?: string; growerName?: string },
+): Promise<HerbBatch> {
+  const batch = await getById(batchId)
+  if (!batch) throw new Error(`批次不存在：${batchId}`)
+
+  if (batch.auditStatus === 'rejected') {
+    throw new Error('该批次已被驳回，暂不能采收')
+  }
+  if (batch.stage !== 'planting') {
+    throw new Error(`仅「种植中」批次可采收，当前阶段：${STAGE_LABEL[batch.stage]}`)
+  }
+  if (!Number.isFinite(input.yieldKg) || input.yieldKg <= 0) {
+    throw new Error('请填写有效的采收数量（大于 0）')
+  }
+  if (!input.harvestDate) {
+    throw new Error('请选择采收日期')
+  }
+
+  const photoCount = Math.min(input.photos?.length ?? 0, 4)
+  const photos = (input.photos ?? []).slice(0, photoCount)
+
+  const description =
+    `采收日期：${input.harvestDate}\n` +
+    `采收数量：${input.yieldKg.toFixed(2)} kg` +
+    (input.plotArea ? `\n采收地块：${input.plotArea}` : '') +
+    (input.harvesterName ? `\n采收人员：${input.harvesterName}` : '') +
+    (input.note ? `\n备注：${input.note}` : '') +
+    (photoCount > 0 ? `\n现场照片：${photoCount} 张` : '')
+
+  /** 先写 harvest 事件，再切阶段；任一失败回滚已写入的内容（用 stage 不动实现简化） */
+  await addBatchEvent(batchId, {
+    type: 'note',
+    title: '采收登记',
+    description,
+    occurredAt: input.harvestDate,
+    operatorName: operator.displayName,
+    operatorRole: 'grower',
+    attachments: photos.length > 0 ? photos : undefined,
+  })
+
+  return setStage(batchId, 'harvested', {
+    operatorName: operator.displayName,
+    operatorRole: 'grower',
+    note: `采收完成：${input.yieldKg.toFixed(2)} kg`,
+  })
 }
 
 /** 重置所有本地覆盖（开发时清空） */

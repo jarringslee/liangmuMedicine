@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Breadcrumb,
   Button,
@@ -23,7 +23,7 @@ import {
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbStore } from '../../../stores/herbStore'
+import { useHerbBatches } from '../../../hooks/useHerbBatches'
 import { collectPlantingLogs, type PlantingLogRow } from '../../../utils/plantingLogs'
 import '../../dashboard/index.less'
 import '../../admin/herbs/herbs.less'
@@ -36,16 +36,9 @@ export default function GrowerLogsPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const data = useHerbStore((s) => s.data)
-  const loading = useHerbStore((s) => s.loading)
-  const load = useHerbStore((s) => s.load)
-  const reload = useHerbStore((s) => s.reload)
+  const { data, loading, reload } = useHerbBatches()
 
   const [keyword, setKeyword] = useState('')
-
-  useEffect(() => {
-    void load()
-  }, [load])
 
   const growerId = session?.growerId
 

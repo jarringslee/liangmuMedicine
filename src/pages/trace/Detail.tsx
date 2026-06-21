@@ -37,10 +37,11 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { getByTraceCode, setAuditStatus, subscribeHerbChanged } from '../../services/herbStorage'
 import { filterEventsForRole } from '../../utils/herbEvents'
-import TraceQrPanel, { buildTraceUrl } from '../../components/herb/TraceQrPanel'
+import TraceQrPanel from '../../components/herb/TraceQrPanel'
 import TraceTimeline from '../../components/herb/TraceTimeline'
 import TraceQuickViewModal from '../../components/herb/TraceQuickViewModal'
 import { AuditTag, RiskTag, StageTag } from '../../components/herb/herbTags'
+import { buildTraceUrl } from '../../utils/traceUrl'
 import {
   AUDIT_LABEL,
   EVENT_TYPE_LABEL,
@@ -145,7 +146,9 @@ export default function TraceDetailPage() {
   }, [traceCode, fromInternal])
 
   useEffect(() => {
-    load()
+    queueMicrotask(() => {
+      void load()
+    })
     const unsub = subscribeHerbChanged(() => load())
     return () => unsub()
   }, [load])
@@ -287,6 +290,7 @@ function BatchView({
   onOpenQuickView: () => void
 }) {
   const { token } = theme.useToken()
+  const navigate = useNavigate()
   const cover = batch.coverImageUrl ?? '/images/herbs/placeholder.svg'
   const buyerOnlyTip =
     role === 'buyer' && batch.auditStatus !== 'approved'
@@ -350,6 +354,20 @@ function BatchView({
                   onClick={onOpenQuickView}
                 >
                   查看溯源链路
+                </Button>
+              ) : null}
+              {/** 种植商视角：仅在「种植中 + 未驳回」时显示「去采收登记」快捷入口 */}
+              {role === 'grower' &&
+              batch.stage === 'planting' &&
+              batch.auditStatus !== 'rejected' ? (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() =>
+                    navigate(`/grower/harvest/new?batchId=${batch.id}`)
+                  }
+                >
+                  采收登记
                 </Button>
               ) : null}
               {showAuditActions ? (

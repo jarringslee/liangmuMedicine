@@ -16,6 +16,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   ArrowLeftOutlined,
+  CheckCircleOutlined,
   EyeOutlined,
   FileTextOutlined,
   MedicineBoxOutlined,
@@ -153,7 +154,7 @@ export default function GrowerBatchesPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 160,
+      width: 220,
       fixed: 'right',
       render: (_, row) => (
         <Space size={0}>
@@ -166,14 +167,24 @@ export default function GrowerBatchesPage() {
             查看
           </Button>
           {row.stage === 'planting' && row.auditStatus !== 'rejected' ? (
-            <Button
-              type="link"
-              size="small"
-              icon={<FileTextOutlined />}
-              onClick={() => navigate(`/grower/logs/new?batchId=${row.id}`)}
-            >
-              写日志
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<FileTextOutlined />}
+                onClick={() => navigate(`/grower/logs/new?batchId=${row.id}`)}
+              >
+                写日志
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => navigate(`/grower/harvest/new?batchId=${row.id}`)}
+              >
+                采收
+              </Button>
+            </>
           ) : null}
         </Space>
       ),

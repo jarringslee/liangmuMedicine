@@ -1,0 +1,44 @@
+.processor-dashboard {
+  &__user-trigger {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+  }
+
+  &__hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 24px;
+    background: linear-gradient(135deg, #eef6f8 0%, #ffffff 70%);
+    border-radius: 12px;
+    border: 1px solid rgba(47, 111, 78, 0.12);
+  }
+
+  &__hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  &__thumb {
+    display: inline-block;
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    background-color: #f2f2f2;
+  }
+}

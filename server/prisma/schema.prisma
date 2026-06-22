@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  grower
+  processor
+  buyer
+}
+
+enum BatchStage {
+  planting
+  harvested
+  processing
+  warehousing
+  shipped
+  sold
+}
+
+enum AuditStatus {
+  pending
+  approved
+  rejected
+}
+
+enum RiskLevel {
+  normal
+  low
+  medium
+  high
+}
+
+enum BatchEventType {
+  create
+  audit
+  stageChange
+  qcReport
+  storage
+  transport
+  transaction
+  note
+}
+
+enum MessageChannel {
+  system
+  email
+  chat
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  province  String?
+  city      String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  batches HerbBatch[]
+}
+
+model User {
+  id             String        @id @default(cuid())
+  username       String        @unique
+  email          String        @unique
+  passwordHash   String
+  displayName    String
+  role           UserRole
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  createdBatches HerbBatch[]  @relation("BatchCreator")
+  events         BatchEvent[]
+  sentMessages   Message[]    @relation("MessageSender")
+  receivedMessages Message[]  @relation("MessageReceiver")
+}
+
+model HerbBatch {
+  id             String       @id @default(cuid())
+  batchNo        String       @unique
+  traceCode      String       @unique
+  herbName       String
+  category       String
+  growerName     String
+  plantingStartDate DateTime
+  origin         Json
+  environment    String?
+  coverImageUrl  String?
+  description    String?
+  stage          BatchStage   @default(planting)
+  auditStatus    AuditStatus  @default(pending)
+  riskLevel      RiskLevel    @default(normal)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  createdById    String?
+  createdBy      User?        @relation("BatchCreator", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  events BatchEvent[]
+}
+
+model BatchEvent {
+  id           String         @id @default(cuid())
+  batchId      String
+  batch        HerbBatch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  type         BatchEventType
+  title        String
+  description  String?
+  occurredAt   DateTime
+  operatorId   String?
+  operator     User?          @relation(fields: [operatorId], references: [id])
+  operatorName String?
+  operatorRole UserRole?
+  fromStage    BatchStage?
+  toStage      BatchStage?
+  attachments  Json?
+  createdAt    DateTime       @default(now())
+}
+
+model Message {
+  id         String         @id @default(cuid())
+  channel    MessageChannel
+  senderId   String?
+  sender     User?          @relation("MessageSender", fields: [senderId], references: [id])
+  receiverId String?
+  receiver   User?          @relation("MessageReceiver", fields: [receiverId], references: [id])
+  senderName String
+  senderRole String?
+  preview    String
+  read       Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+}

@@ -1,8 +1,12 @@
+import { useEffect, useState } from 'react'
 import { Badge, Button, Divider, Popover, Tag, Typography } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import type { InboxMessage } from '../mock/message/inbox'
-import { getRecentInboxPreview, getUnreadMessageCount } from '../mock/message/inbox'
+import {
+  getInboxSnapshot,
+  subscribeInboxChanged,
+} from '../mock/message/inbox'
 import './MessageBell.less'
 
 const { Text } = Typography
@@ -27,13 +31,25 @@ function SenderLine({ item }: { item: InboxMessage }) {
 
 export function MessageBell() {
   const navigate = useNavigate()
-  const unread = getUnreadMessageCount()
-  const recent = getRecentInboxPreview(5)
+  const [snapshot, setSnapshot] = useState(() => getInboxSnapshot(5))
+
+  useEffect(() => {
+    const refresh = () => setSnapshot(getInboxSnapshot(5))
+    const unsubscribe = subscribeInboxChanged(refresh)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    refresh()
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
 
   const content = (
     <div className="message-bell-popover">
       <div className="message-bell-popover__list">
-        {recent.map((item, index) => (
+        {snapshot.recent.map((item, index) => (
           <div key={item.id}>
             {index > 0 ? <Divider style={{ margin: '8px 0' }} /> : null}
             <div
@@ -69,7 +85,7 @@ export function MessageBell() {
       placement="bottomRight"
       mouseEnterDelay={0.15}
     >
-      <Badge count={unread} overflowCount={99} size="small">
+      <Badge count={snapshot.unread} overflowCount={99} size="small">
         <Button
           type="text"
           icon={<BellOutlined />}

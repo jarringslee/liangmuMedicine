@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Breadcrumb,
+  Button,
   Card,
   Flex,
   Layout,
@@ -12,13 +13,14 @@ import {
   theme,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { ArrowLeftOutlined, BellOutlined, MedicineBoxOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, BellOutlined, MedicineBoxOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import {
   type InboxMessage,
   type MessageChannel,
   channelLabel,
-  inboxMessages,
+  getInboxSnapshot,
+  subscribeInboxChanged,
 } from '../../mock/message/inbox'
 import '../dashboard/index.less'
 
@@ -37,11 +39,26 @@ type TabKey = (typeof TAB_ITEMS)[number]['key']
 export default function MessagesPage() {
   const { token } = theme.useToken()
   const [tab, setTab] = useState<TabKey>('all')
+  const [snapshot, setSnapshot] = useState(() => getInboxSnapshot(10))
+
+  const refreshMessages = () => setSnapshot(getInboxSnapshot(10))
+
+  useEffect(() => {
+    const unsubscribe = subscribeInboxChanged(refreshMessages)
+    window.addEventListener('focus', refreshMessages)
+    document.addEventListener('visibilitychange', refreshMessages)
+    queueMicrotask(refreshMessages)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refreshMessages)
+      document.removeEventListener('visibilitychange', refreshMessages)
+    }
+  }, [])
 
   const dataSource = useMemo(() => {
-    if (tab === 'all') return inboxMessages
-    return inboxMessages.filter((m) => m.channel === tab)
-  }, [tab])
+    if (tab === 'all') return snapshot.all
+    return snapshot.all.filter((m) => m.channel === tab)
+  }, [snapshot.all, tab])
 
   const columns: ColumnsType<InboxMessage> = [
     {
@@ -117,7 +134,17 @@ export default function MessagesPage() {
           ]}
         />
 
-        <Card bordered={false}>
+        <Card
+          bordered={false}
+          extra={
+            <Space>
+              <Text type="secondary">本地动态消息 {snapshot.dynamicCount} 条</Text>
+              <Button size="small" icon={<ReloadOutlined />} onClick={refreshMessages}>
+                刷新消息
+              </Button>
+            </Space>
+          }
+        >
           <Tabs
             activeKey={tab}
             onChange={(k) => setTab(k as TabKey)}

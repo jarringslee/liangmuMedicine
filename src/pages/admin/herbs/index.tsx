@@ -38,6 +38,7 @@ import {
 import { setAuditStatus } from '../../../services/herbStorage'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
+import { MessageBell } from '../../../components/MessageBell'
 import '../../dashboard/index.less'
 import './herbs.less'
 
@@ -232,12 +233,15 @@ export default function AdminHerbsPage() {
               药材管理
             </Title>
           </Space>
-          <Link to="/dashboard">
-            <Space>
-              <ArrowLeftOutlined />
-              返回数据概览
-            </Space>
-          </Link>
+          <Space size="large">
+            <MessageBell />
+            <Link to="/dashboard">
+              <Space>
+                <ArrowLeftOutlined />
+                返回数据概览
+              </Space>
+            </Link>
+          </Space>
         </Flex>
       </Header>
 

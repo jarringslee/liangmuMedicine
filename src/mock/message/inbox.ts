@@ -19,11 +19,14 @@ export type InboxMessage = {
   read: boolean
 }
 
+const STORAGE_KEY = 'liangmu_admin_inbox_messages'
+const INBOX_CHANGED_EVENT = 'liangmu-inbox-changed'
+
 /**
  * 全量静态消息（按时间新→旧已排好序，越靠上越新）
  * 未读用于顶栏角标与列表未读态
  */
-export const inboxMessages: InboxMessage[] = [
+const staticInboxMessages: InboxMessage[] = [
   {
     id: 'm1',
     channel: 'system',
@@ -109,15 +112,110 @@ export const inboxMessages: InboxMessage[] = [
   },
 ]
 
+/** 兼容旧调用：静态消息基线。动态消息请使用 listInboxMessages()。 */
+export const inboxMessages = staticInboxMessages
+
+function nowDisplay(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function randomSuffix(): string {
+  return Math.random().toString(36).slice(2, 8)
+}
+
+function readDynamicMessages(): InboxMessage[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((m): m is InboxMessage => {
+      if (!m || typeof m !== 'object') return false
+      const item = m as Partial<InboxMessage>
+      return (
+        typeof item.id === 'string' &&
+        ['system', 'email', 'chat'].includes(item.channel ?? '') &&
+        typeof item.senderName === 'string' &&
+        typeof item.dateLabel === 'string' &&
+        typeof item.preview === 'string' &&
+        typeof item.read === 'boolean'
+      )
+    })
+  } catch {
+    return []
+  }
+}
+
+function writeDynamicMessages(messages: InboxMessage[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+  window.dispatchEvent(new Event(INBOX_CHANGED_EVENT))
+}
+
+export function listInboxMessages(): InboxMessage[] {
+  return [...readDynamicMessages(), ...staticInboxMessages]
+}
+
+export function getDynamicInboxMessageCount(): number {
+  return readDynamicMessages().length
+}
+
+export function getInboxSnapshot(limit = 5): {
+  all: InboxMessage[]
+  recent: InboxMessage[]
+  unread: number
+  dynamicCount: number
+} {
+  const all = listInboxMessages()
+  return {
+    all,
+    recent: all.slice(0, Math.max(0, limit)),
+    unread: all.filter((m) => !m.read).length,
+    dynamicCount: getDynamicInboxMessageCount(),
+  }
+}
+
+export function addAdminSystemMessage(input: {
+  preview: string
+  senderName?: string
+  dateLabel?: string
+}): InboxMessage {
+  const message: InboxMessage = {
+    id: `local-${Date.now()}-${randomSuffix()}`,
+    channel: 'system',
+    senderName: input.senderName ?? '系统消息',
+    dateLabel: input.dateLabel ?? nowDisplay(),
+    preview: input.preview,
+    read: false,
+  }
+
+  writeDynamicMessages([message, ...readDynamicMessages()])
+  return message
+}
+
+export function subscribeInboxChanged(listener: () => void): () => void {
+  const onChange = () => listener()
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) listener()
+  }
+  window.addEventListener(INBOX_CHANGED_EVENT, onChange)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener(INBOX_CHANGED_EVENT, onChange)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
 export function getUnreadMessageCount(): number {
-  return inboxMessages.filter((m) => !m.read).length
+  return listInboxMessages().filter((m) => !m.read).length
 }
 
 /** 角标用：与未读数一致，随数据变化 */
 export const unreadMessageCount = getUnreadMessageCount()
 
 export function getRecentInboxPreview(limit = 5): InboxMessage[] {
-  return inboxMessages.slice(0, Math.max(0, limit))
+  return listInboxMessages().slice(0, Math.max(0, limit))
 }
 
 export function channelLabel(c: MessageChannel): string {

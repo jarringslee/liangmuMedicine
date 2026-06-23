@@ -6,7 +6,7 @@ healthRouter.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'liangmuMedicine API',
-    database: 'not-connected-yet',
+    database: 'not-checked',
     timestamp: new Date().toISOString(),
   })
 })

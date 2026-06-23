@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -65,6 +64,8 @@ model Organization {
 
   users   User[]
   batches HerbBatch[]
+
+  @@index([type])
 }
 
 model User {
@@ -83,6 +84,9 @@ model User {
   events         BatchEvent[]
   sentMessages   Message[]    @relation("MessageSender")
   receivedMessages Message[]  @relation("MessageReceiver")
+
+  @@index([role])
+  @@index([organizationId])
 }
 
 model HerbBatch {
@@ -108,6 +112,11 @@ model HerbBatch {
   updatedAt      DateTime     @updatedAt
 
   events BatchEvent[]
+
+  @@index([stage])
+  @@index([auditStatus])
+  @@index([organizationId])
+  @@index([createdById])
 }
 
 model BatchEvent {
@@ -126,6 +135,11 @@ model BatchEvent {
   toStage      BatchStage?
   attachments  Json?
   createdAt    DateTime       @default(now())
+
+  @@index([batchId])
+  @@index([type])
+  @@index([operatorId])
+  @@index([occurredAt])
 }
 
 model Message {
@@ -140,4 +154,8 @@ model Message {
   preview    String
   read       Boolean        @default(false)
   createdAt  DateTime       @default(now())
+
+  @@index([channel])
+  @@index([receiverId, read])
+  @@index([createdAt])
 }

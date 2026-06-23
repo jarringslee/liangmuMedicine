@@ -98,7 +98,7 @@ export function LoginForm() {
         </Form.Item>
 
         <div className="login-page__pwd-hint">
-          <Text type="secondary">首次登录密码默认为邮箱</Text>
+          <Text type="secondary">首次登录密码默认为用户ID+123</Text>
         </div>
 
         <Flex justify="flex-end" className="login-page__forgot-row">

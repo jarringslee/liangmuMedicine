@@ -19,7 +19,7 @@ import GrowerHarvestNewPage from './pages/grower/harvest/new'
 import ProcessorDashboardPage from './pages/processor/dashboard'
 import ProcessorBatchesPage from './pages/processor/batches'
 import TraceDetailPage from './pages/trace/Detail'
-import { useHerbStoreInvalidator } from './hooks/useHerbBatches'
+import { useHerbQueryInvalidator } from './hooks/useHerbBatches'
 
 const appTheme = {
   token: {
@@ -46,7 +46,7 @@ export default function App() {
  * 所有订阅 useHerbBatches / useHerbBatchById 的页面自动重新拉取。
  */
 function HerbSyncBridge() {
-  useHerbStoreInvalidator()
+  useHerbQueryInvalidator()
   return (
     <Routes>
       <Route

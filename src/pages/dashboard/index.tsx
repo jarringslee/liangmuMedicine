@@ -303,7 +303,7 @@ function DashboardInner() {
                 中药材全链路智能溯源管理平台
               </Title>
               <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8, maxWidth: 720 }}>
-                打通种植、加工、采购、销售与质检数据，支持批次级追溯、风险预警与链上存证。
+                打通种植、加工、采购、销售与质检数据，支持批次级追溯、风险预警与关键节点留痕。
               </Paragraph>
             </div>
             <Space wrap>

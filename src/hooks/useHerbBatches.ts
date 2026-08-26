@@ -39,7 +39,6 @@ export const herbQueryKeys = {
 
 /**
  * 订阅式获取全量批次列表
- * - 替代旧的 zustand herbStore + useHerbBatches
  * - 对外返回结构与旧版完全一致：{ data, loading, error, reload }
  *   - data: HerbBatch[]
  *   - loading: boolean（首屏为 true）
@@ -148,11 +147,11 @@ export function useHerbBatchMutations() {
 }
 
 /**
- * 把 zustand `herbStore` 的全局订阅迁移到 queryClient：
+ * 把本地覆盖层的变更事件桥接到 TanStack Query：
  * 任意 storage 变更（新增/审核/阶段/重置）触发 `herb-changed` 事件，
- * 在这里统一 invalidate，让 useQuery 自动重新拉取。
+ * 在这里统一使批次查询缓存失效，让 useQuery 自动重新拉取。
  */
-export function useHerbStoreInvalidator() {
+export function useHerbQueryInvalidator() {
   const qc = useQueryClient()
   useEffect(() => {
     const onChange = () => qc.invalidateQueries({ queryKey: herbQueryKeys.all })

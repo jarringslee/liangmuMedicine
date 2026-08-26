@@ -90,10 +90,10 @@ export const summaryCards: SummaryCardItem[] = [
     accent: 'cyan',
   },
   {
-    title: '链上存证次数',
+    title: '溯源留痕次数',
     value: 15620,
     suffix: '次',
-    hint: '关键节点上链记录',
+    hint: '关键业务节点记录',
     iconKey: 'thunderbolt',
     accent: 'lime',
   },

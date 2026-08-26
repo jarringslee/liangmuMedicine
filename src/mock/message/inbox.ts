@@ -66,7 +66,7 @@ const staticInboxMessages: InboxMessage[] = [
     senderName: '蒿润圆',
     senderRole: '加工商',
     dateLabel: '2026-04-28 16:40',
-    preview: '本批甘草初加工环节质检报告编号已同步至平台，请确认节点是否上链成功。',
+    preview: '本批甘草初加工环节质检报告编号已同步至平台，请确认溯源节点是否记录成功。',
     read: true,
   },
   {
@@ -107,7 +107,7 @@ const staticInboxMessages: InboxMessage[] = [
     channel: 'system',
     senderName: '系统消息',
     dateLabel: '2026-04-26 19:00',
-    preview: '平台将于 5 月 1 日 02:00–04:00 进行维护，期间链上存证与对外查询将短暂不可用。',
+    preview: '平台将于 5 月 1 日 02:00–04:00 进行维护，期间溯源记录与对外查询将短暂不可用。',
     read: true,
   },
 ]

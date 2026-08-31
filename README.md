@@ -1,8 +1,8 @@
 # 良木药谷 liangmuMedicine
 
-良木药谷是 React + TypeScript + Node.jsPostgreSQL 构建的中药材全链路智能溯源平台。项目围绕种植商、加工商、平台管理员和采购商四类角色，展示药材从建档、审核、种植、采收、加工、质检到下游溯源的协作流程。
+良木药谷是使用 React、TypeScript、Node.js 和 PostgreSQL 构建的中药材全链路智能溯源平台。项目围绕种植商、加工商、平台管理员和采购商四类角色，展示药材从建档、审核、种植、采收、加工、质检到下游溯源的协作流程。
 
-项目面向前端与 AI 应用开发岗位作品集。目前已经完成四端前端基础闭环、本地演示数据、Express 后端骨架和 PostgreSQL 初始表结构；真实业务 API、服务端鉴权、AI 审核 Agent、RAG 与实时通知正在后续阶段接入。
+项目面向前端与 AI 应用开发岗位作品集。目前已经完成四端前端基础闭环、Express 后端骨架、PostgreSQL V2 核心模型及可重复执行的业务 seed；真实业务 API、服务端鉴权、AI 审核 Agent、RAG 与实时通知正在后续阶段接入。
 
 ## 在线演示
 
@@ -59,9 +59,11 @@
 ### 后端与数据库地基
 
 - Express + TypeScript 服务骨架
-- `GET /api/health` 健康检查
-- Prisma schema 与初始 migration
-- PostgreSQL 本地数据库连接
+- `GET /api/health` 服务与 PostgreSQL 真实健康检查
+- Prisma V2 多租户核心模型与两条 migration
+- 组织、用户、批次、事件、审核、附件和业务通知表结构
+- Prisma PostgreSQL Driver Adapter 与共享数据库客户端
+- 12 个组织、8 个账号、15 个批次及关联业务记录的可重复 seed
 
 ## 技术栈
 
@@ -79,7 +81,8 @@
 
 - Node.js + Express + TypeScript
 - PostgreSQL
-- Prisma
+- Prisma + `@prisma/adapter-pg` + `pg`
+- bcryptjs
 - Zod
 
 ### 部署
@@ -97,11 +100,12 @@ React 页面
   + localStorage 本地覆盖层
 ```
 
-后端地基目前独立存在：
+后端数据库层目前独立存在：
 
 ```text
 Express /api/health
-  → Prisma schema / migration
+  → 共享 Prisma Client
+  → PostgreSQL Driver Adapter
   → PostgreSQL
 ```
 
@@ -121,7 +125,7 @@ liangmuMedicine/
 │  ├─ types/              # 认证与药材业务类型
 │  └─ utils/              # 鉴权、溯源码和业务辅助函数
 ├─ server/
-│  ├─ prisma/             # Prisma schema 与 migrations
+│  ├─ prisma/             # Prisma schema、migrations 与 seed
 │  └─ src/                # Express 应用、配置和路由
 └─ README.md
 ```
@@ -160,7 +164,8 @@ cd server
 npm install
 npm run prisma:validate
 npm run prisma:generate
-npm run prisma:migrate:dev
+npx prisma migrate deploy
+npm run prisma:seed
 npm run dev
 ```
 
@@ -170,7 +175,7 @@ npm run dev
 
 ## 演示账号
 
-以下均为前端 Mock 演示账号，不是真实生产账号。
+以下账号同时存在于前端 Mock 与本地数据库 seed 中。前端目前仍使用 Mock 校验；数据库只保存 bcrypt 哈希，不保存明文密码。
 
 | 角色 | 用户名 | 密码 |
 | --- | --- | --- |
@@ -195,12 +200,13 @@ cd server
 npm run typecheck
 npm run build
 npm run prisma:validate
+npm run prisma:seed
 ```
 
 ## 下一阶段
 
-1. 定稿多租户 Prisma V2 模型并编写 seed
-2. 实现登录鉴权、RBAC 与组织数据隔离
+1. 实现登录 API、密码校验和访问令牌
+2. 实现 RBAC 与组织数据隔离中间件
 3. 实现批次 CRUD、审核、事件和阶段流转 API
 4. 前端从 JSON/localStorage 切换到真实 API
 5. 开放脱敏的匿名扫码溯源页面
@@ -213,5 +219,6 @@ npm run prisma:validate
 - 路由权限和账号登录目前主要由前端 Mock 实现，不可视为生产安全方案。
 - localStorage 数据仅在同一站点、同一浏览器中共享。
 - 图片和质检附件目前以 base64 形式本地保存，只适合演示。
-- PostgreSQL 已完成初始建表，但尚未导入业务样例，也没有业务 API。
-- AI Agent、RAG、实时通知和轻量多租户仍属于明确规划，尚未标记为已实现。
+- PostgreSQL 已应用 V2 核心模型并导入 seed，但前端尚未调用真实业务 API。
+- 轻量多租户目前只完成数据库关系，API 层的 RBAC 和组织过滤尚未实现。
+- AI Agent、RAG 和实时通知仍属于明确规划，尚未标记为已实现。

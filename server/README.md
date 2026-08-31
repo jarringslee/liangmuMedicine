@@ -1,103 +1,121 @@
 # liangmuMedicine Server
 
-后端第一刀：Node.js + Express + PostgreSQL 地基。
+良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已经完成数据库运行时连接、V2 核心模型、两条 migration、开发 seed 和真实数据库健康检查；登录鉴权与业务 API 尚未接入。
 
-## 当前范围
+## 当前能力
 
 - Express API 骨架
-- `/api/health` 健康检查
-- `.env.example` 环境变量模板
-- Prisma schema
-- 初始 PostgreSQL migration SQL
+- `GET /api/health` 服务与 PostgreSQL 健康检查
+- Prisma V2 多组织核心模型
+- `@prisma/adapter-pg` + `pg` PostgreSQL Driver Adapter
+- 共享 Prisma Client 与进程退出时的连接释放
+- 两条 PostgreSQL migration
+- 可重复执行的开发 seed
 
-暂不做：
+## 本地准备
 
-- 前端数据迁移
-- 登录鉴权
-- AI / WebSocket
+安装依赖：
 
-这些会在后续小步接入。
-
-## 本地启动
-
-```bash
+```powershell
 cd server
 npm install
-npm run dev
 ```
 
-健康检查：
-
-```bash
-curl http://localhost:4000/api/health
-```
-
-说明：当前健康检查只确认 Express 服务是否运行，暂不检查 PostgreSQL 连接。
-
-## 数据库准备
-
-当前数据库方案已敲定：
-
-- Node.js + Express
-- PostgreSQL
-- Prisma
-
-本地需要先准备 PostgreSQL。数据库名建议：
-
-```text
-liangmu_medicine
-```
-
-复制环境变量：
-
-```bash
-cp .env.example .env
-```
-
-Windows PowerShell 可用：
+复制环境变量模板：
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-然后修改 `.env`：
+在 `.env` 中填写本机连接串：
 
 ```env
 DATABASE_URL=postgresql://postgres:你的密码@localhost:5432/liangmu_medicine?schema=public
 ```
 
-校验 Prisma schema：
+`.env` 包含密码和 API Key，不得提交到 Git。后端启动和 Prisma 数据库命令都要求存在有效的 `DATABASE_URL`。
 
-```bash
+## 初始化数据库
+
+校验 Schema 并生成 Prisma Client：
+
+```powershell
 npm run prisma:validate
-```
-
-说明：当前使用 Prisma 7，`DATABASE_URL` 由 `prisma.config.ts` 读取，不再写在 `schema.prisma` 的 datasource 中。
-如果没有创建 `.env` 或没有填写 `DATABASE_URL`，Prisma 命令会直接报错提醒。
-
-生成 Prisma Client：
-
-```bash
 npm run prisma:generate
 ```
 
-执行 migration（需要 PostgreSQL 已启动且 `DATABASE_URL` 正确）：
+在新环境应用仓库中已有的 migration：
 
-```bash
-npm run prisma:migrate:dev -- --name init
+```powershell
+npx prisma migrate deploy
 ```
 
-如果只是先看表结构，不想连接数据库，可以直接阅读：
+导入开发演示数据：
 
-```text
-prisma/migrations/20260623000100_init/migration.sql
+```powershell
+npm run prisma:seed
 ```
 
-## 后续顺序
+Prisma 7 只会在显式执行 `prisma db seed` 时运行 seed。当前 seed 从仓库的 `public/data/herb-batches.json` 读取并校验 15 条前端样例，使用固定主键和 `upsert` 写入：
 
-1. 本地 PostgreSQL 执行初始 migration
-2. 补 seed，把现有 mock 账号和药材批次导入数据库
-3. 实现 batches API
-4. 前端 `herbStorage.ts` 从 localStorage 逐步切到 API
-5. 增加 AI 代理接口 `/api/ai/chat`
-6. 增加 Socket.IO 实时消息
+- 12 个组织
+- 8 个测试账号
+- 15 个药材批次
+- 50 条批次事件
+- 14 条审核记录
+- 7 条附件元数据
+- 4 条业务通知
+
+重复执行不会增加重复记录。测试账号密码会先通过 bcryptjs 哈希，再写入 `passwordHash`。
+
+## 启动与检查
+
+开发启动：
+
+```powershell
+npm run dev
+```
+
+默认地址：<http://localhost:4000>
+
+健康检查：<http://localhost:4000/api/health>
+
+数据库可用时返回：
+
+```json
+{
+  "status": "ok",
+  "service": "liangmuMedicine API",
+  "database": "connected",
+  "timestamp": "..."
+}
+```
+
+数据库不可用时返回 HTTP 503，并将状态标记为 `degraded`。
+
+## 常用命令
+
+```powershell
+npm run typecheck
+npm run build
+npm run prisma:validate
+npm run prisma:generate
+npm run prisma:seed
+npm run prisma:studio
+```
+
+修改 Schema 后，在交互式本地终端创建开发 migration：
+
+```powershell
+npm run prisma:migrate:dev -- --name 迁移名称
+```
+
+不要改写已经应用过的 migration。新环境或部署环境只应用仓库已有 migration，应使用 `prisma migrate deploy`。
+
+## 下一阶段
+
+1. 登录 API、bcrypt 密码校验与访问令牌
+2. RBAC 和组织数据隔离中间件
+3. 批次、审核、事件与阶段流转 API
+4. 前端 TanStack Query 接入真实 API
+5. AI 审核 Agent、RAG 和实时通知

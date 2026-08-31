@@ -6,7 +6,7 @@ dotenv.config()
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
-  DATABASE_URL: z.string().optional(),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   DEEPSEEK_API_KEY: z.string().optional(),
 })
 

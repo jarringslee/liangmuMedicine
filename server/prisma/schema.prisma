@@ -13,6 +13,28 @@ enum UserRole {
   buyer
 }
 
+enum OrganizationType {
+  platform
+  grower
+  processor
+  buyer
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum HerbCategory {
+  root
+  wholeHerb
+  fruitSeed
+  flowerLeaf
+  bark
+  mineral
+  other
+}
+
 enum BatchStage {
   planting
   harvested
@@ -26,6 +48,16 @@ enum AuditStatus {
   pending
   approved
   rejected
+}
+
+enum AuditDecision {
+  approved
+  rejected
+}
+
+enum AuditSource {
+  manual
+  aiAssisted
 }
 
 enum RiskLevel {
@@ -46,26 +78,31 @@ enum BatchEventType {
   note
 }
 
-enum MessageChannel {
+enum NotificationType {
+  batchSubmitted
+  auditResult
+  stageChanged
+  qcReportUploaded
   system
-  email
-  chat
 }
 
 model Organization {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
+  code      String           @unique
   name      String
-  type      String
+  type      OrganizationType
   province  String?
   city      String?
   address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  enabled   Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  users   User[]
-  batches HerbBatch[]
+  users            User[]
+  grownBatches     HerbBatch[] @relation("BatchGrowerOrganization")
+  processedBatches HerbBatch[] @relation("BatchProcessorOrganization")
 
-  @@index([type])
+  @@index([type, enabled])
 }
 
 model User {
@@ -75,47 +112,56 @@ model User {
   passwordHash   String
   displayName    String
   role           UserRole
+  status         UserStatus    @default(active)
   organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  createdBatches HerbBatch[]  @relation("BatchCreator")
-  events         BatchEvent[]
-  sentMessages   Message[]    @relation("MessageSender")
-  receivedMessages Message[]  @relation("MessageReceiver")
+  createdBatches      HerbBatch[]    @relation("BatchCreator")
+  events              BatchEvent[]   @relation("EventOperator")
+  audits              BatchAudit[]   @relation("AuditReviewer")
+  uploadedAttachments Attachment[]   @relation("AttachmentUploader")
+  notifications       Notification[]
 
-  @@index([role])
+  @@index([role, status])
   @@index([organizationId])
 }
 
 model HerbBatch {
-  id             String       @id @default(cuid())
-  batchNo        String       @unique
-  traceCode      String       @unique
-  herbName       String
-  category       String
-  growerName     String
-  plantingStartDate DateTime
-  origin         Json
-  environment    String?
-  coverImageUrl  String?
-  description    String?
-  stage          BatchStage   @default(planting)
-  auditStatus    AuditStatus  @default(pending)
-  riskLevel      RiskLevel    @default(normal)
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  createdById    String?
-  createdBy      User?        @relation("BatchCreator", fields: [createdById], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                      String        @id @default(cuid())
+  batchNo                 String        @unique
+  traceCode               String        @unique
+  herbName                String
+  category                HerbCategory
+  plantingStartDate       DateTime      @db.Date
+  origin                  Json
+  environment             String?
+  coverImageUrl           String?
+  description             String?
+  requiresProcessing      Boolean       @default(true)
+  stage                   BatchStage    @default(planting)
+  auditStatus             AuditStatus   @default(pending)
+  riskLevel               RiskLevel     @default(normal)
+  growerOrganizationId    String
+  growerOrganization      Organization  @relation("BatchGrowerOrganization", fields: [growerOrganizationId], references: [id], onDelete: Restrict)
+  processorOrganizationId String?
+  processorOrganization   Organization? @relation("BatchProcessorOrganization", fields: [processorOrganizationId], references: [id], onDelete: SetNull)
+  createdById             String
+  createdBy               User          @relation("BatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  version                 Int           @default(1)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 
-  events BatchEvent[]
+  events        BatchEvent[]
+  audits        BatchAudit[]
+  attachments   Attachment[]
+  notifications Notification[]
 
   @@index([stage])
-  @@index([auditStatus])
-  @@index([organizationId])
+  @@index([auditStatus, riskLevel])
+  @@index([growerOrganizationId, auditStatus])
+  @@index([processorOrganizationId, stage])
   @@index([createdById])
 }
 
@@ -126,36 +172,79 @@ model BatchEvent {
   type         BatchEventType
   title        String
   description  String?
+  payload      Json?
   occurredAt   DateTime
   operatorId   String?
-  operator     User?          @relation(fields: [operatorId], references: [id])
+  operator     User?          @relation("EventOperator", fields: [operatorId], references: [id], onDelete: SetNull)
   operatorName String?
   operatorRole UserRole?
+  visibleRoles UserRole[]     @default([])
   fromStage    BatchStage?
   toStage      BatchStage?
-  attachments  Json?
   createdAt    DateTime       @default(now())
 
-  @@index([batchId])
+  attachments Attachment[]
+
+  @@index([batchId, occurredAt])
   @@index([type])
   @@index([operatorId])
-  @@index([occurredAt])
 }
 
-model Message {
-  id         String         @id @default(cuid())
-  channel    MessageChannel
-  senderId   String?
-  sender     User?          @relation("MessageSender", fields: [senderId], references: [id])
-  receiverId String?
-  receiver   User?          @relation("MessageReceiver", fields: [receiverId], references: [id])
-  senderName String
-  senderRole String?
-  preview    String
-  read       Boolean        @default(false)
-  createdAt  DateTime       @default(now())
+model BatchAudit {
+  id           String        @id @default(cuid())
+  batchId      String
+  batch        HerbBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User          @relation("AuditReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  reviewerName String
+  decision     AuditDecision
+  source       AuditSource   @default(manual)
+  riskLevel    RiskLevel
+  reason       String?
+  evidence     Json?
+  modelName    String?
+  createdAt    DateTime      @default(now())
 
-  @@index([channel])
-  @@index([receiverId, read])
+  @@index([batchId, createdAt])
+  @@index([reviewerId])
+  @@index([decision])
+}
+
+model Attachment {
+  id           String      @id @default(cuid())
+  batchId      String
+  batch        HerbBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  eventId      String?
+  event        BatchEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  uploadedById String?
+  uploadedBy   User?       @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  originalName String
+  storageKey   String      @unique
+  publicUrl    String?
+  mimeType     String
+  sizeBytes    Int
+  checksum     String?
+  createdAt    DateTime    @default(now())
+
+  @@index([batchId])
+  @@index([eventId])
+  @@index([uploadedById])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  recipientId String
+  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  batchId     String?
+  batch       HerbBatch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  title       String
+  content     String
+  metadata    Json?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, readAt])
+  @@index([batchId])
   @@index([createdAt])
 }

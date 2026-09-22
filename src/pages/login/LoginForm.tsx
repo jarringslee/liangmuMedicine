@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
-import { Button, Flex, Form, Input, message, Segmented, Tabs, Typography } from 'antd'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMemo, useRef, useState } from 'react'
+import { Alert, Button, Flex, Form, Input, message, Segmented, Tabs, Typography } from 'antd'
 import { useAuth } from '../../hooks/useAuth'
 import { loginRoleTabs, type LoginRoleKey } from '../../mock/login/roles'
-import { getDefaultHome, verifyStaticLogin } from '../../mock/user/credentials'
-import { sanitizeRedirectPath } from '../../utils/auth'
+import { authMode } from '../../config/api'
+import { ApiError, isAbortError } from '../../services/api'
 
 const { Text } = Typography
 
@@ -15,12 +14,11 @@ type FieldValues = {
   password: string
 }
 
-const ACCOUNT_ERROR = '输入信息错误'
-
 export function LoginForm() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const { login } = useAuth()
+  const { login, message: authMessage } = useAuth()
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const submittingRef = useRef(false)
   const [role, setRole] = useState<LoginRoleKey>('admin')
   const [mode, setMode] = useState<LoginAccountMode>('username')
   const [form] = Form.useForm<FieldValues>()
@@ -32,35 +30,43 @@ export function LoginForm() {
       loginRoleTabs.map((t) => ({
         key: t.key,
         label: t.label,
+        disabled: submitting,
       })),
-    [],
+    [submitting],
   )
 
-  const onFinish = (values: FieldValues) => {
-    const session = verifyStaticLogin(role, mode, values.account ?? '', values.password ?? '')
-    if (!session) {
-      message.error(ACCOUNT_ERROR)
-      return
+  const onFinish = async (values: FieldValues) => {
+    // ref 同步锁住同一渲染周期内的重复提交，loading 负责视觉反馈。
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setSubmitting(true)
+    setError(null)
+    try {
+      await login({ role, account: values.account.trim(), password: values.password })
+      // 登录状态发布后由 GuestOnly 统一跳转，避免两处 navigate 相互竞争。
+    } catch (error) {
+      if (isAbortError(error)) return
+      setError(error instanceof ApiError ? error.message : '登录失败，请稍后重试')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
     }
-
-    login(session)
-    message.success(`欢迎，${session.displayName}`)
-
-    const redirect = sanitizeRedirectPath(searchParams.get('redirect'))
-    navigate(redirect ?? getDefaultHome(session.role), { replace: true })
   }
 
   const onForgotPassword = () => {
-    message.info('演示环境：请联系系统管理员重置密码。内部账号由管理员统一开通与发放。')
+    message.info('请联系系统管理员重置密码。内部账号由管理员统一开通与发放。')
   }
 
   return (
     <div className="login-page__form-wrap">
+      {authMode === 'demo' && <Alert type="info" title="演示模式：操作仅保存在当前浏览器" showIcon style={{ marginBottom: 16 }} />}
+      {(error || authMessage) && <Alert type="error" title={error ?? authMessage} showIcon role="alert" style={{ marginBottom: 16 }} />}
       <Tabs
         activeKey={role}
         onChange={(k) => {
           setRole(k as LoginRoleKey)
           form.resetFields()
+          setError(null)
         }}
         size="small"
         className="login-page__role-tabs"
@@ -69,10 +75,12 @@ export function LoginForm() {
 
       <Segmented<LoginAccountMode>
         block
+        disabled={submitting}
         value={mode}
         onChange={(v) => {
           setMode(v)
           form.setFieldValue('account', '')
+          setError(null)
         }}
         options={[
           { label: '用户名登录', value: 'username' },
@@ -83,22 +91,26 @@ export function LoginForm() {
 
       <Form<FieldValues>
         form={form}
+        disabled={submitting}
         layout="vertical"
         requiredMark={false}
         className="login-page__form"
         onFinish={onFinish}
         autoComplete="off"
       >
-        <Form.Item name="account" label={accountPlaceholder} rules={[{ required: true, message: `请输入${accountPlaceholder}` }]}>
-          <Input allowClear placeholder={`请输入${accountPlaceholder}`} size="large" />
+        <Form.Item name="account" label={accountPlaceholder} rules={[
+          { required: true, whitespace: true, message: `请输入${accountPlaceholder}` },
+          ...(mode === 'email' ? [{ type: 'email' as const, message: '请输入有效邮箱' }] : []),
+        ]}>
+          <Input allowClear placeholder={`请输入${accountPlaceholder}`} size="large" maxLength={254} autoComplete="username" />
         </Form.Item>
 
         <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
-          <Input.Password placeholder="请输入密码" size="large" visibilityToggle />
+          <Input.Password placeholder="请输入密码" size="large" visibilityToggle autoComplete="current-password" />
         </Form.Item>
 
         <div className="login-page__pwd-hint">
-          <Text type="secondary">首次登录密码默认为用户ID+123</Text>
+          <Text type="secondary">{authMode === 'demo' ? '演示账号密码为用户名 + 123' : '请使用管理员分配的账号登录'}</Text>
         </div>
 
         <Flex justify="flex-end" className="login-page__forgot-row">
@@ -108,7 +120,7 @@ export function LoginForm() {
         </Flex>
 
         <Form.Item className="login-page__submit-item">
-          <Button type="primary" htmlType="submit" size="large" block>
+          <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
             登录
           </Button>
         </Form.Item>

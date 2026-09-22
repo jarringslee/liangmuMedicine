@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.seed.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.seed.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "tsx --test tests/auth.test.ts",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
@@ -21,6 +22,8 @@
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
+    "express-rate-limit": "8.7.0",
+    "jose": "6.2.10",
     "pg": "8.23.0",
     "zod": "latest"
   },

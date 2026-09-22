@@ -2,6 +2,7 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { GuestOnly, RequireAuth } from './components/RequireAuth'
+import { AuthBoundary } from './components/AuthBoundary'
 import Dashboard from './pages/dashboard'
 import LoginPage from './pages/login'
 import MessagesPage from './pages/messages'
@@ -33,7 +34,7 @@ export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={appTheme}>
       <BrowserRouter>
-        <HerbSyncBridge />
+        <AuthBoundary><HerbSyncBridge /></AuthBoundary>
       </BrowserRouter>
     </ConfigProvider>
   )

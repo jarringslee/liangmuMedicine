@@ -1,7 +1,8 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
+import { Button, Result } from 'antd'
+import { useAuth } from '../hooks/useAuth'
 import type { UserRole } from '../types/auth'
-import { getDefaultHome } from '../mock/user/credentials'
-import { getAuthSession, sanitizeRedirectPath } from '../utils/auth'
+import { getDefaultHome, sanitizeRedirectPath } from '../utils/auth'
 
 type RequireAuthProps = {
   children: React.ReactNode
@@ -11,7 +12,7 @@ type RequireAuthProps = {
 
 export function RequireAuth({ children, allowedRoles }: RequireAuthProps) {
   const location = useLocation()
-  const session = getAuthSession()
+  const { session } = useAuth()
 
   if (!session) {
     const redirect = encodeURIComponent(location.pathname + location.search)
@@ -19,7 +20,8 @@ export function RequireAuth({ children, allowedRoles }: RequireAuthProps) {
   }
 
   if (allowedRoles && !allowedRoles.includes(session.role)) {
-    return <Navigate to={getDefaultHome(session.role)} replace />
+    return <Result status="403" title="没有访问权限" subTitle="当前账号无权访问此页面。"
+      extra={<Link to={getDefaultHome(session.role)}><Button type="primary">返回工作台</Button></Link>} />
   }
 
   return children
@@ -31,8 +33,9 @@ type GuestOnlyProps = {
 
 /** 已登录用户访问登录页时跳转到首页或 redirect */
 export function GuestOnly({ children }: GuestOnlyProps) {
-  const session = getAuthSession()
-  const params = new URLSearchParams(window.location.search)
+  const { session } = useAuth()
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
   const redirect = sanitizeRedirectPath(params.get('redirect'))
 
   if (session) {

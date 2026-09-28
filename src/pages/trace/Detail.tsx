@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   Alert,
   Breadcrumb,
@@ -35,7 +40,11 @@ import {
 } from '@ant-design/icons'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { getByTraceCode, setAuditStatus, subscribeHerbChanged } from '../../services/herbStorage'
+import {
+  useHerbBatchByTraceCode,
+  useHerbBatchMutations,
+} from '../../hooks/useHerbBatches'
+import type { AuditDecision } from '../../services/herbDataSource'
 import { filterEventsForRole } from '../../utils/herbEvents'
 import TraceQrPanel from '../../components/herb/TraceQrPanel'
 import TraceTimeline from '../../components/herb/TraceTimeline'
@@ -47,7 +56,6 @@ import {
   EVENT_TYPE_LABEL,
   HERB_CATEGORY_LABEL,
   STAGE_LABEL,
-  type AuditStatus,
   type BatchEvent,
   type HerbBatch,
 } from '../../types/herb'
@@ -117,8 +125,13 @@ export default function TraceDetailPage() {
   const role: UserRole = session?.role ?? 'buyer'
   const vis = ROLE_VISIBILITY[role]
 
-  const [batch, setBatch] = useState<HerbBatch | null>(null)
-  const [loading, setLoading] = useState(true)
+  const {
+    data: batch,
+    loading,
+    error,
+    reload,
+  } = useHerbBatchByTraceCode(traceCode)
+  const { setAudit: auditMutation } = useHerbBatchMutations()
 
   /**
    * 是否首次访问需要自动弹链路弹窗
@@ -129,33 +142,16 @@ export default function TraceDetailPage() {
   const [quickOpen, setQuickOpen] = useState(false)
   const autoTriggeredRef = useRef(false)
 
-  const load = useCallback(async () => {
-    if (!traceCode) return
-    setLoading(true)
-    try {
-      const data = await getByTraceCode(traceCode)
-      setBatch(data)
-      /** 首次取到数据且非站内跳转 → 自动弹一次链路弹窗 */
-      if (data && !fromInternal && !autoTriggeredRef.current) {
-        autoTriggeredRef.current = true
-        setQuickOpen(true)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [traceCode, fromInternal])
-
   useEffect(() => {
-    queueMicrotask(() => {
-      void load()
-    })
-    const unsub = subscribeHerbChanged(() => load())
-    return () => unsub()
-  }, [load])
+    if (batch && !fromInternal && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true
+      setQuickOpen(true)
+    }
+  }, [batch, fromInternal])
 
   const back = backHomeForRole(role)
 
-  const handleAudit = async (next: AuditStatus) => {
+  const handleAudit = async (next: AuditDecision) => {
     if (!batch) return
     Modal.confirm({
       title: `确认将该批次置为「${AUDIT_LABEL[next]}」？`,
@@ -164,7 +160,10 @@ export default function TraceDetailPage() {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await setAuditStatus(batch.id, next)
+          await auditMutation.mutateAsync({
+            id: batch.id,
+            decision: next,
+          })
           message.success(`已更新为：${AUDIT_LABEL[next]}`)
         } catch (e) {
           message.error(`更新失败：${(e as Error).message}`)
@@ -192,7 +191,7 @@ export default function TraceDetailPage() {
             <Button
               type="text"
               icon={<ReloadOutlined />}
-              onClick={() => load()}
+              onClick={reload}
               aria-label="刷新"
             />
             <Link to={back.path} className="trace-detail__back">
@@ -232,6 +231,27 @@ export default function TraceDetailPage() {
               <Spin />
             </Flex>
           </Card>
+        ) : error ? (
+          <Card
+            bordered={false}
+            className="trace-detail__not-found"
+          >
+            <Result
+              status="warning"
+              title="暂时无法加载批次"
+              subTitle={error.message}
+              extra={
+                <Space>
+                  <Button onClick={() => navigate(back.path)}>
+                    {back.label}
+                  </Button>
+                  <Button type="primary" onClick={reload}>
+                    重试
+                  </Button>
+                </Space>
+              }
+            />
+          </Card>
         ) : !batch ? (
           <Card bordered={false} className="trace-detail__not-found">
             <Result
@@ -241,7 +261,7 @@ export default function TraceDetailPage() {
               extra={
                 <Space>
                   <Button onClick={() => navigate(back.path)}>{back.label}</Button>
-                  <Button type="primary" onClick={() => load()}>
+                  <Button type="primary" onClick={reload}>
                     重试
                   </Button>
                 </Space>
@@ -286,7 +306,7 @@ function BatchView({
   showInternal: boolean
   showAuditActions: boolean
   showTimeline: boolean
-  onAudit: (next: AuditStatus) => void
+  onAudit: (next: AuditDecision) => void
   onOpenQuickView: () => void
 }) {
   const { token } = theme.useToken()
@@ -358,8 +378,8 @@ function BatchView({
               ) : null}
               {/** 种植商视角：仅在「种植中 + 未驳回」时显示「去采收登记」快捷入口 */}
               {role === 'grower' &&
-              batch.stage === 'planting' &&
-              batch.auditStatus !== 'rejected' ? (
+                batch.stage === 'planting' &&
+                batch.auditStatus !== 'rejected' ? (
                 <Button
                   type="primary"
                   icon={<CheckCircleOutlined />}
@@ -384,9 +404,8 @@ function BatchView({
                         icon: <CloseCircleOutlined style={{ color: token.colorError }} />,
                         label: '驳回',
                       },
-                      { key: 'pending', label: '置为待审核' },
                     ],
-                    onClick: ({ key }) => onAudit(key as AuditStatus),
+                    onClick: ({ key }) => onAudit(key as AuditDecision),
                   }}
                 >
                   <Button icon={<MoreOutlined />}>审核操作</Button>

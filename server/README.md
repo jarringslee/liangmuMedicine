@@ -1,6 +1,6 @@
 # liangmuMedicine Server
 
-良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已完成 V2 模型、migration、seed、数据库健康检查，以及登录/JWT 身份校验、RBAC 角色守卫；React 已接入真实登录与 `/auth/me`，批次业务 API 尚未实现。
+良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已完成 V2 模型、migration、seed、数据库健康检查、登录/JWT 身份校验、RBAC 角色守卫、按角色和组织过滤的批次读取，以及种植商建档和管理员审核写接口；React 已接入这些能力。
 
 ## 当前能力
 
@@ -13,7 +13,9 @@
 - 可重复执行的开发 seed
 - 登录、当前用户查询、角色守卫、账号和组织状态检查
 - 一小时 Access Token、登录限流及统一错误响应
-- 不修改真实数据库的鉴权接口自动化测试
+- 批次分页、搜索、阶段/审核/风险筛选和 ID/溯源码详情查询
+- 管理员、种植商、加工商和采购商的批次行级读取范围及详情字段过滤
+- 不修改真实数据库的鉴权与批次接口自动化测试
 
 ## 本地准备
 
@@ -160,10 +162,35 @@ npm run prisma:migrate:dev -- --name 迁移名称
 
 MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删除本地凭证，不会撤销已泄漏的 Token；它仍可能在过期前使用。部署必须使用 HTTPS，JWT 密钥不得传入前端。
 
+## 批次接口
+
+全部接口均要求 `Authorization: Bearer <accessToken>`，并设置 `Cache-Control: no-store`。
+
+读取接口：
+
+- `GET /api/batches`：支持 `page`、`pageSize`、`search`、`stage`、`auditStatus`、`riskLevel`
+- `GET /api/batches/:identifier`：`identifier` 可为数据库 ID 或溯源码
+
+列表响应为 `{ items, pagination: { page, pageSize, total, totalPages } }`，详情响应为 `{ batch }`。数据范围由服务端认证身份决定，不接受客户端传入组织 ID：
+
+- admin：全部批次
+- grower：本种植组织批次
+- processor：分配给本加工组织的批次
+- buyer：审核通过的批次
+
+详情继续按 `visibleRoles` 过滤事件，完整审核历史暂只向管理员返回。不可见批次与不存在批次统一返回 404，避免通过接口枚举其他组织的数据。
+
+写入接口：
+
+- `POST /api/batches`：仅种植商可调用；服务端从认证身份派生种植组织与创建人，固定生成 `planting + pending + normal` 初始状态，并原子写入建档事件
+- `PATCH /api/batches/:identifier/audit`：仅管理员可调用；接收 `approved/rejected`、可选原因与风险等级，原子更新状态、审核记录、审核事件和版本号
+
+请求体使用 Zod 严格校验，不接受客户端提交组织、创建人、初始审核状态等可信字段。事件追加、采收、加工和阶段流转仍未接入后端。
+
 ## 下一阶段
 
 前端开发模式通过 Vite 将 `/api` 代理到本服务；生产构建默认使用独立的 demo 认证，不要求静态托管平台运行本服务。环境切换与请求层说明见根目录 README。
 
-1. 实现带组织过滤的最小批次列表/详情 API，并同步接入 TanStack Query
-2. 前后端一起推进审核、事件和阶段流转，不继续扩展独立后端基础设施
+1. 推进事件追加、采收、加工和阶段流转写接口，不继续扩展独立后端基础设施
+2. 接入真实附件存储并补充关键业务接口测试
 3. AI 审核 Agent、RAG 和实时通知

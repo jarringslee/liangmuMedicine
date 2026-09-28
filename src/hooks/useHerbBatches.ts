@@ -2,39 +2,50 @@
  * 批次数据 hooks（基于 TanStack Query v5）
  *
  * 设计要点：
- * 1. 底层数据源仍是 `herbStorage`（localStorage 覆盖层 + JSON 样例）。
- *    当后端 API 就绪时，只改 queryFn 内部一行 `await fetch('/api/batches')` 即可，
- *    所有调用方零改动。
- * 2. 任意写操作（add/update/audit/event/harvest）完成后，storage 层会派发
- *    `herb-changed` 事件，queryClient 监听到后自动 invalidate
- *    `['herb-batches']`，所有订阅者重新拉取 → 多页面实时同步。
- * 3. 对外暴露两个常用入口：
+ * 1. `herbDataSource` 根据 VITE_AUTH_MODE 选择真实 API 或本地演示数据，
+ *    页面与 Hook 不需要感知实际数据来源。
+ * 2. mutation 成功后统一 invalidate 批次缓存；demo 模式的其他本地写入
+ *    仍可通过 `herb-changed` 事件触发缓存失效。
+ * 3. 对外暴露三个常用入口：
  *    - `useHerbBatches()`  —— 列表（admin / buyer / grower 都在用）
  *    - `useHerbBatchById(id)` —— 详情（按需启用，避免列表页面也拖详情）
+ *    - `useHerbBatchByTraceCode(code)` —— 扫码、直接链接共用的详情
  * 4. `useHerbBatchMutations()` 暴露 6 个 mutation，调用方按需取用。
  */
 import { useEffect } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { HerbBatch } from '../types/herb'
-import type { AuditStatus, BatchEvent, Stage } from '../types/herb'
+import type { BatchEvent, Stage } from '../types/herb'
 import {
-  addBatch,
   addBatchEvent,
-  getById,
-  listBatches,
   recordHarvest,
-  setAuditStatus,
   updateBatch,
   type HarvestInput,
   type NewBatchEventInput,
   type NewBatchInput,
 } from '../services/herbStorage'
 
+import { authMode } from '../config/api'
+import {
+  auditHerbBatch,
+  createHerbBatch,
+  getHerbBatchById,
+  getHerbBatchByTraceCode,
+  listHerbBatches,
+  type AuditHerbBatchInput,
+} from '../services/herbDataSource'
+
 /** 全局 queryKey 集中管理，避免散落字符串 */
 export const herbQueryKeys = {
-  all: ['herb-batches'] as const,
-  list: () => [...herbQueryKeys.all, 'list'] as const,
-  detail: (id: string) => [...herbQueryKeys.all, 'detail', id] as const,
+  all: ['herb-batches', authMode] as const,
+  list: () =>
+    [...herbQueryKeys.all, 'list'] as const,
+  detail: (identifier: string) =>
+    [
+      ...herbQueryKeys.all,
+      'detail',
+      identifier,
+    ] as const,
 }
 
 /**
@@ -48,7 +59,7 @@ export const herbQueryKeys = {
 export function useHerbBatches() {
   const query = useQuery({
     queryKey: herbQueryKeys.list(),
-    queryFn: listBatches,
+    queryFn: listHerbBatches,
   })
 
   const queryClient = useQueryClient()
@@ -65,16 +76,19 @@ export function useHerbBatches() {
 }
 
 /** 按 ID 获取单个批次（详情页按需启用） */
+// 根据批次 ID 查询药材详情的自定义 Hook
 export function useHerbBatchById(id: string | null | undefined) {
   const query = useQuery({
-    queryKey: id ? herbQueryKeys.detail(id) : ['herb-batches', 'noop'],
-    queryFn: () => (id ? getById(id).then((b) => b as HerbBatch | null) : Promise.resolve(null)),
+    queryKey: id ? herbQueryKeys.detail(id) : [...herbQueryKeys.all, 'noop'],
+    queryFn: () => (id ? getHerbBatchById(id) : Promise.resolve(null)),
     enabled: Boolean(id),
   })
+
   return {
     data: query.data ?? null,
     loading: query.isPending,
     error: (query.error as Error | null) ?? null,
+    reload: () => void query.refetch(),
   }
 }
 
@@ -88,7 +102,7 @@ export function useHerbBatchMutations() {
   const invalidate = () => qc.invalidateQueries({ queryKey: herbQueryKeys.all })
 
   const create = useMutation({
-    mutationFn: (input: NewBatchInput) => addBatch(input),
+    mutationFn: (input: NewBatchInput) => createHerbBatch(input),
     onSuccess: invalidate,
   })
   const update = useMutation({
@@ -97,8 +111,8 @@ export function useHerbBatchMutations() {
     onSuccess: invalidate,
   })
   const setAudit = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: AuditStatus }) =>
-      setAuditStatus(id, status),
+    mutationFn: (input: AuditHerbBatchInput) =>
+      auditHerbBatch(input),
     onSuccess: invalidate,
   })
   const addEvent = useMutation({
@@ -158,4 +172,61 @@ export function useHerbQueryInvalidator() {
     window.addEventListener('herb-changed', onChange)
     return () => window.removeEventListener('herb-changed', onChange)
   }, [qc])
+}
+
+/**
+ * 列表接口只返回摘要；确实依赖事件链的页面再按需补查详情。
+ * 当前仅用于种植日志和采收记录，避免所有列表都产生 N+1 请求。
+ */
+export function useHerbBatchDetails(batches: HerbBatch[]) {
+  const queries = useQueries({
+    queries: batches.map((batch) => ({
+      queryKey: herbQueryKeys.detail(batch.id),
+      queryFn: () => getHerbBatchById(batch.id),
+      enabled: authMode === 'api',
+    })),
+  })
+
+  if (authMode === 'demo') {
+    return {
+      data: batches,
+      loading: false,
+      error: null as Error | null,
+      reload: () => undefined,
+    }
+  }
+
+  return {
+    data: queries.flatMap((query) => (query.data ? [query.data] : [])),
+    loading: queries.some((query) => query.isPending || query.isFetching),
+    error: (queries.find((query) => query.error)?.error as Error | null) ?? null,
+    reload: () => {
+      queries.forEach((query) => void query.refetch())
+    },
+  }
+}
+
+/** 按溯源码读取详情，列表点击、扫码和直接链接均可复用。 */
+export function useHerbBatchByTraceCode(
+  traceCode: string | null | undefined,
+) {
+  const query = useQuery({
+    queryKey: traceCode
+      ? herbQueryKeys.detail(traceCode)
+      : [...herbQueryKeys.all, 'noop-trace'],
+    queryFn: () =>
+      traceCode
+        ? getHerbBatchByTraceCode(traceCode)
+        : Promise.resolve(null),
+    enabled: Boolean(traceCode),
+  })
+
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: (query.error as Error | null) ?? null,
+    reload: () => {
+      void query.refetch()
+    },
+  }
 }

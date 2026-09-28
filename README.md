@@ -2,7 +2,7 @@
 
 良木药谷是使用 React、TypeScript、Node.js 和 PostgreSQL 构建的中药材全链路智能溯源平台。项目围绕种植商、加工商、平台管理员和采购商四类角色，展示药材从建档、审核、种植、采收、加工、质检到下游溯源的协作流程。
 
-项目面向前端与 AI 应用开发岗位作品集。目前已经完成四端前端基础闭环、PostgreSQL V2 核心模型、业务 seed，以及前后端真实登录/JWT 鉴权与角色守卫；批次业务 API、AI 审核 Agent、RAG 与实时通知将在后续完成。
+项目面向前端与 AI 应用开发岗位作品集。目前已经完成四端前端基础闭环、PostgreSQL V2 核心模型、业务 seed、前后端真实登录/JWT 鉴权、受角色和组织约束的批次读取，以及“种植商建档 → 管理员审核”的首条真实写入闭环；React 通过 TanStack Query 接入 API，同时保留静态 demo 数据源。事件追加、阶段流转、AI 审核 Agent、RAG 与实时通知将在后续完成。
 
 ## 在线演示
 
@@ -81,7 +81,9 @@ RAG 智能问答尚未实现。规划在批次详情页与扫码快速预览中�
 - 12 个组织、8 个账号、15 个批次及关联业务记录的可重复 seed
 - `POST /api/auth/login`、`GET /api/auth/me`：真实账号登录与当前用户查询
 - 一小时 JWT Access Token、账号/组织状态检查、RBAC 角色守卫和登录限流
-- 鉴权接口自动化测试（内存用户，不修改 PostgreSQL 数据）
+- `GET /api/batches`：分页、搜索、阶段/审核/风险筛选及四角色数据范围
+- `GET /api/batches/:identifier`：按数据库 ID 或溯源码读取详情，包含角色可见的事件、审核与附件
+- 鉴权和批次接口自动化测试（内存数据，不修改 PostgreSQL）
 
 ## 技术栈
 
@@ -114,23 +116,12 @@ RAG 智能问答尚未实现。规划在批次详情页与扫码快速预览中�
 ```text
 React 页面
   → TanStack Query hooks
-  → herbStorage.ts
-  → public/data/herb-batches.json
-  + localStorage 本地覆盖层
+  → herbDataSource.ts（按 VITE_AUTH_MODE 切换）
+      ├─ api：services/api.ts → Express → Prisma → PostgreSQL
+      └─ demo：herbStorage.ts → JSON 样例 + localStorage 覆盖层
 ```
 
-认证链路已接入后端；以上批次数据链路暂未迁移：
-
-```text
-React 登录页 / 刷新恢复
-  → services/auth.ts → services/api.ts
-  → Express /api/auth/login、/api/auth/me
-  → 共享 Prisma Client
-  → PostgreSQL Driver Adapter
-  → PostgreSQL
-```
-
-下一阶段会把页面写操作统一收口到 TanStack Query mutation 和 API Client，再用真实业务 API 替换 `herbStorage.ts` 的本地实现。
+API 模式下，批次列表、列表点击详情、扫码/输码查询和直接溯源链接均读取 PostgreSQL。列表接口只返回摘要；种植日志和采收记录等依赖事件链的页面再按需查询详情。种植商可创建待审核批次，管理员可审核通过或驳回；组织、创建人和初始状态均由服务端身份生成。尚未接入 API 的事件、采收和加工写入会被明确拒绝，避免产生“看似成功但只写入 localStorage”的假数据。
 
 ## 项目目录
 
@@ -246,9 +237,9 @@ npm run prisma:seed
 
 ## 下一阶段
 
-1. 实现按组织过滤的最小批次列表/详情 API，立即接入 TanStack Query，完善加载、空态和错误重试
-2. 前后端一起完成批次 CRUD、审核和阶段流转
-3. 处理前端路由懒加载、请求状态与异常体验
+1. 接入种植日志、采收、加工事件和阶段流转写接口，完成批次全链路写入
+2. 处理前端路由懒加载和首包体积，继续完善请求状态与异常体验
+3. 为关键批次数据适配和页面交互补充前端自动化测试
 4. 开放脱敏的匿名溯源页面，支持扫码或直接打开链接，不以扫码作为访问条件
 5. 接入实时业务通知
 6. 实现 AI 审核 Agent、RAG 知识问答与效果评测；批次详情与扫码快速预览提供共用的问答入口
@@ -256,12 +247,12 @@ npm run prisma:seed
 
 ## 当前限制
 
-- 真实身份已接入；批次、看板、消息及个人资料扩展字段仍包含演示数据，资料/密码编辑未接入真实写接口。
+- 真实身份、批次读取、种植商建档和管理员审核已接入；看板中的部分辅助信息、消息及个人资料扩展字段仍包含演示数据，资料/密码编辑未接入真实写接口。
 - API 模式只在 sessionStorage 保存 Token，用户身份来自服务端；demo 使用独立存储键，不信任旧 Mock 登录记录。sessionStorage 不是防 XSS 的保险箱，部署仍需 HTTPS 与 XSS 防护。
 - 退出清除的是认证信息和内存请求缓存，不删除用于跨角色演示的业务 localStorage；这不代表组织隔离已完成。
 - localStorage 数据仅在同一站点、同一浏览器中共享。
 - 图片和质检附件目前以 base64 形式本地保存，只适合演示。
-- PostgreSQL 已应用 V2 核心模型并导入 seed，但前端尚未调用真实业务 API。
-- 已建立可信身份和组织上下文；尚无批次业务 API，因此业务数据的按组织过滤尚未实现，不能宣称多租户隔离已经完成。
+- PostgreSQL 已应用 V2 核心模型并导入 seed；前端批次列表、详情、溯源码查询、种植商建档和管理员审核已调用真实 API。
+- 批次读取、创建和审核已在服务端实施角色与组织约束；事件追加、采收、加工和阶段流转仍未接入真实写接口，不能宣称全链路已经完成。
 - 暂无 Refresh Token、服务端登出撤销与多实例共享限流；Token 一小时过期后重新登录。
 - AI Agent、RAG 和实时通知仍属于明确规划，尚未标记为已实现。

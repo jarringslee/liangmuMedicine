@@ -31,6 +31,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import type { HerbBatch } from '../../../types/herb'
 import '../../dashboard/index.less'
@@ -47,7 +48,7 @@ export default function ProcessorDashboardPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
-  const { data, loading } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
 
   /**
    * 第一版 processor 端暂不做分配关系：
@@ -135,6 +136,8 @@ export default function ProcessorDashboardPage() {
             { title: <span style={{ color: token.colorText }}>加工工作台</span> },
           ]}
         />
+
+        <BatchQueryError error={error} onRetry={reload} />
 
         <div className="processor-dashboard__hero">
           <div>

@@ -30,6 +30,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { addBatchEvent, setStage as setBatchStage } from '../../../services/herbStorage'
 import { addAdminSystemMessage } from '../../../mock/message/inbox'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
@@ -74,7 +75,7 @@ export default function ProcessorBatchesPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const { data, loading, reload } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
 
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<ProcessorStage | 'all'>('all')
@@ -428,6 +429,8 @@ export default function ProcessorBatchesPage() {
             { title: <span style={{ color: token.colorText }}>加工批次</span> },
           ]}
         />
+
+        <BatchQueryError error={error} onRetry={reload} />
 
         <Card bordered={false}>
           <div className="herb-admin__toolbar">

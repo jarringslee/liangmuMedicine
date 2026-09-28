@@ -35,12 +35,18 @@ import {
   type HerbBatch,
   type Stage,
 } from '../../../types/herb'
-import { setAuditStatus } from '../../../services/herbStorage'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import {
+  useHerbBatchMutations,
+  useHerbBatches,
+} from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import { MessageBell } from '../../../components/MessageBell'
 import '../../dashboard/index.less'
 import './herbs.less'
+
+import type { AuditDecision } from '../../../services/herbDataSource'
+import { authMode } from '../../../config/api'
 
 const { Header, Content } = Layout
 const { Text, Title } = Typography
@@ -61,7 +67,9 @@ const AUDIT_OPTIONS: { value: AuditStatus | 'all'; label: string }[] = [
 export default function AdminHerbsPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
-  const { data, loading, reload } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
+
+  const { setAudit: auditMutation } = useHerbBatchMutations()
 
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<Stage | 'all'>('all')
@@ -82,17 +90,25 @@ export default function AdminHerbsPage() {
     })
   }, [data, keyword, stage, audit])
 
-  const handleAudit = async (id: string, next: AuditStatus) => {
+  const handleAudit = async (
+    id: string,
+    decision: AuditDecision,
+  ) => {
     try {
-      await setAuditStatus(id, next)
-      message.success(`已更新为：${AUDIT_LABEL[next]}`)
-      reload()
+      await auditMutation.mutateAsync({
+        id,
+        decision,
+      })
+      message.success(`已更新为：${AUDIT_LABEL[decision]}`)
     } catch (e) {
       message.error(`更新失败：${(e as Error).message}`)
     }
   }
 
-  const confirmAudit = (row: HerbBatch, next: AuditStatus) => {
+  const confirmAudit = (
+    row: HerbBatch,
+    next: AuditDecision,
+  ) => {
     if (row.auditStatus === next) {
       message.info(`当前已是「${AUDIT_LABEL[next]}」状态`)
       return
@@ -206,15 +222,20 @@ export default function AdminHerbsPage() {
                   icon: <CloseCircleOutlined style={{ color: token.colorError }} />,
                   label: '驳回',
                 },
-                {
-                  key: 'pending',
-                  label: '置为待审核',
-                },
               ],
-              onClick: ({ key }) => confirmAudit(row, key as AuditStatus),
+              onClick: ({ key }) =>
+                confirmAudit(row, key as AuditDecision),
             }}
           >
-            <Button type="text" size="small" icon={<MoreOutlined />}>
+            <Button
+              type="text"
+              size="small"
+              icon={<MoreOutlined />}
+              loading={
+                auditMutation.isPending &&
+                auditMutation.variables?.id === row.id
+              }
+            >
               审核
             </Button>
           </Dropdown>
@@ -254,6 +275,8 @@ export default function AdminHerbsPage() {
           ]}
         />
 
+        <BatchQueryError error={error} onRetry={reload} />
+
         <Card bordered={false}>
           <div className="herb-admin__toolbar">
             <Input.Search
@@ -283,6 +306,8 @@ export default function AdminHerbsPage() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
+              disabled={authMode === 'api'}
+              title={authMode === 'api' ? '真实数据模式请由种植商创建待审核批次' : undefined}
               onClick={() => navigate('/admin/herbs/new')}
             >
               新增药材批次

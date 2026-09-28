@@ -31,10 +31,11 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import QrScanDrawer from '../../../components/herb/QrScanDrawer'
 import TraceQuickViewModal from '../../../components/herb/TraceQuickViewModal'
-import { getByTraceCode } from '../../../services/herbStorage'
+import { getHerbBatchByTraceCode } from '../../../services/herbDataSource'
 import {
   HERB_CATEGORY_LABEL,
   STAGE_LABEL,
@@ -69,7 +70,7 @@ export default function BuyerHerbsPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
-  const { data, loading } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
 
   const [scanOpen, setScanOpen] = useState(false)
   const [quickViewBatch, setQuickViewBatch] = useState<HerbBatch | null>(null)
@@ -100,7 +101,7 @@ export default function BuyerHerbsPage() {
   const handleScanResult = async (code: string) => {
     setScanOpen(false)
     try {
-      const found = await getByTraceCode(code)
+      const found = await getHerbBatchByTraceCode(code)
       if (!found) {
         message.error(`未找到该溯源码：${code}`)
         return
@@ -190,6 +191,8 @@ export default function BuyerHerbsPage() {
             { title: <span style={{ color: token.colorText }}>药材浏览</span> },
           ]}
         />
+
+        <BatchQueryError error={error} onRetry={reload} />
 
         <div className="buyer-herbs__hero">
           <div>

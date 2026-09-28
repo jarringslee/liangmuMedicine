@@ -23,7 +23,8 @@ import {
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import { useHerbBatchDetails, useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { collectPlantingLogs, type PlantingLogRow } from '../../../utils/plantingLogs'
 import '../../dashboard/index.less'
 import '../../admin/herbs/herbs.less'
@@ -36,16 +37,39 @@ export default function GrowerLogsPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const { data, loading, reload } = useHerbBatches()
+  const {
+    data,
+    loading: listLoading,
+    error: listError,
+    reload: reloadList,
+  } = useHerbBatches()
 
   const [keyword, setKeyword] = useState('')
 
   const growerId = session?.growerId
 
-  const logs = useMemo(() => {
-    const mine = growerId ? data.filter((b) => b.growerId === growerId) : []
-    return collectPlantingLogs(mine).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1))
-  }, [data, growerId])
+  const summaries = useMemo(
+    () => (growerId ? data.filter((batch) => batch.growerId === growerId) : []),
+    [data, growerId],
+  )
+  const {
+    data: batches,
+    loading: detailsLoading,
+    error: detailsError,
+    reload: reloadDetails,
+  } = useHerbBatchDetails(summaries)
+
+  const logs = useMemo(
+    () => collectPlantingLogs(batches).sort(
+      (left, right) => (left.occurredAt < right.occurredAt ? 1 : -1),
+    ),
+    [batches],
+  )
+  const error = listError ?? detailsError
+  const reload = () => {
+    reloadList()
+    reloadDetails()
+  }
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -146,6 +170,8 @@ export default function GrowerLogsPage() {
           ]}
         />
 
+        <BatchQueryError error={error} onRetry={reload} />
+
         <Card bordered={false}>
           <div className="herb-admin__toolbar">
             <Input.Search
@@ -175,7 +201,7 @@ export default function GrowerLogsPage() {
           <Table<PlantingLogRow>
             rowKey={(row) => row.eventId}
             size="small"
-            loading={loading}
+            loading={listLoading || detailsLoading}
             columns={columns}
             dataSource={filtered}
             scroll={{ x: 980 }}

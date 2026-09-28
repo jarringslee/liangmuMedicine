@@ -34,7 +34,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useAuth } from '../../../hooks/useAuth'
-import { addBatch } from '../../../services/herbStorage'
+import { useHerbBatchMutations } from '../../../hooks/useHerbBatches'
 import {
   HERB_CATEGORY_LABEL,
   type HerbBatch,
@@ -79,13 +79,15 @@ export default function GrowerBatchNewPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
   const [form] = Form.useForm<FormValues>()
-  const [submitting, setSubmitting] = useState(false)
+
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null)
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [createdBatch, setCreatedBatch] = useState<HerbBatch | null>(null)
 
   const growerId = session?.growerId
   const growerName = session?.growerName
+
+  const { create } = useHerbBatchMutations()
 
   const resetAll = () => {
     form.resetFields()
@@ -111,9 +113,8 @@ export default function GrowerBatchNewPage() {
       message.error('当前账号未绑定合作社，无法建档')
       return
     }
-    setSubmitting(true)
     try {
-      const batch = await addBatch({
+      const batch = await create.mutateAsync({
         herbName: values.herbName.trim(),
         category: values.category,
         growerId,
@@ -139,8 +140,6 @@ export default function GrowerBatchNewPage() {
       message.success('已提交建档，等待管理员审核')
     } catch (e) {
       message.error(`提交失败：${(e as Error).message}`)
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -377,7 +376,7 @@ export default function GrowerBatchNewPage() {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  loading={submitting}
+                  loading={create.isPending}
                   icon={<PlusOutlined />}
                 >
                   提交建档（待审核）

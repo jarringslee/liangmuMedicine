@@ -26,6 +26,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import {
   AUDIT_LABEL,
@@ -57,7 +58,7 @@ export default function GrowerBatchesPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const { data, loading, reload } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
 
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<Stage | 'all'>('all')
@@ -218,6 +219,8 @@ export default function GrowerBatchesPage() {
             { title: <span style={{ color: token.colorText }}>我的批次</span> },
           ]}
         />
+
+        <BatchQueryError error={error} onRetry={reload} />
 
         <Card bordered={false}>
           <div className="herb-admin__toolbar">

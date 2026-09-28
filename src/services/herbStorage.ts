@@ -3,11 +3,23 @@
  *
  * - 基础样例来自 `/public/data/herb-batches.json`
  * - 用户在前端新增/修改的批次以「覆盖层」形式写入 localStorage
- * - 所有方法均为 async，后续可无痛替换为真实 API
+ * - 所有方法均为 async，后续可替换为真实 API
  */
 
 import type { AuditStatus, BatchEvent, HerbBatch, HerbCategory, HerbOrigin, RiskLevel, Stage } from '../types/herb'
 import { STAGE_LABEL } from '../types/herb'
+import { authMode } from '../config/api'
+
+/**
+ * API 模式当前只完成真实读取。
+ */
+function assertDemoWrite(): void {
+  if (authMode === 'api') {
+    throw new Error(
+      '真实 API 当前只开放批次读取，写操作将在下一阶段接入',
+    )
+  }
+}
 
 const STORAGE_KEY = 'liangmu_herb_overrides'
 const DATA_URL = `${import.meta.env.BASE_URL}data/herb-batches.json`
@@ -43,8 +55,14 @@ function readOverrides(): Overrides {
 }
 
 function writeOverrides(next: Overrides): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  window.dispatchEvent(new Event('herb-changed'))
+  assertDemoWrite()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(next),
+  )
+  window.dispatchEvent(
+    new Event('herb-changed'),
+  )
 }
 
 async function loadBundled(): Promise<HerbBatch[]> {
@@ -386,8 +404,9 @@ export async function recordHarvest(
   })
 }
 
-/** 重置所有本地覆盖（开发时清空） */
+
 export function resetOverrides(): void {
+  assertDemoWrite()
   localStorage.removeItem(STORAGE_KEY)
   window.dispatchEvent(new Event('herb-changed'))
 }

@@ -24,7 +24,8 @@ import {
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import { useHerbBatchDetails, useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { STAGE_LABEL, type HerbBatch, type Stage } from '../../../types/herb'
 import '../../dashboard/index.less'
 import '../../admin/herbs/herbs.less'
@@ -93,7 +94,12 @@ export default function GrowerHarvestListPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const { data, reload } = useHerbBatches()
+  const {
+    data,
+    loading: listLoading,
+    error: listError,
+    reload: reloadList,
+  } = useHerbBatches()
 
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<Stage | 'all'>('all')
@@ -101,10 +107,21 @@ export default function GrowerHarvestListPage() {
   const growerId = session?.growerId
 
   /** 自己的批次 */
-  const mine = useMemo(
+  const summaries = useMemo(
     () => (growerId ? data.filter((b) => b.growerId === growerId) : []),
     [data, growerId],
   )
+  const {
+    data: mine,
+    loading: detailsLoading,
+    error: detailsError,
+    reload: reloadDetails,
+  } = useHerbBatchDetails(summaries)
+  const error = listError ?? detailsError
+  const reload = () => {
+    reloadList()
+    reloadDetails()
+  }
 
   /** 全部采收记录 */
   const allHarvests = useMemo(
@@ -239,6 +256,8 @@ export default function GrowerHarvestListPage() {
           ]}
         />
 
+        <BatchQueryError error={error} onRetry={reload} />
+
         <div className="grower-harvest__summary">
           <div className="grower-harvest__summary-item">
             <span className="grower-harvest__summary-label">采收批次</span>
@@ -292,6 +311,7 @@ export default function GrowerHarvestListPage() {
           <Table<HarvestRow>
             rowKey={(r) => `${r.batchId}-${r.harvestDate}-${r.yieldKg}`}
             size="small"
+            loading={listLoading || detailsLoading}
             columns={columns}
             dataSource={filtered}
             scroll={{ x: 1000 }}

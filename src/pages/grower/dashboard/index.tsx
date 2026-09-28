@@ -33,6 +33,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import type { HerbBatch } from '../../../types/herb'
 import '../../dashboard/index.less'
@@ -49,7 +50,7 @@ export default function GrowerDashboardPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
-  const { data, loading } = useHerbBatches()
+  const { data, loading, error, reload } = useHerbBatches()
 
   const growerId = session?.growerId
 
@@ -136,6 +137,8 @@ export default function GrowerDashboardPage() {
             { title: <span style={{ color: token.colorText }}>种植工作台</span> },
           ]}
         />
+
+        <BatchQueryError error={error} onRetry={reload} />
 
         <div className="grower-dashboard__hero">
           <div>

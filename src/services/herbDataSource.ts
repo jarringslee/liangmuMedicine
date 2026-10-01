@@ -5,6 +5,8 @@
 // 404 转换为 null，网络错误继续抛出；
 // 对页面隐藏“数据到底来自 API 还是 Mock”。
 
+// 页面不再直接操作 localStorage，统一经数据源自动选择 demo 或真实 API
+
 import dayjs from 'dayjs' // 日期处理工具库，用来格式化、比较时间
 import { authMode } from '../config/api' // 读取配置，判断当前是本地模拟模式，还是调用后端真实API模式
 import type { UserRole } from '../types/auth' // 用户角色类型定义（仅TS类型，无运行时代码）
@@ -21,10 +23,15 @@ import type {
 } from '../types/herb'
 import {
     addBatch as addLocalBatch,
+    addBatchEvent as addLocalBatchEvent,
     getById as getLocalBatchById,
     getByTraceCode as getLocalBatchByTraceCode,
     listBatches as listLocalBatches,
+    recordHarvest as recordLocalHarvest,
     setAuditStatus as setLocalAuditStatus,
+    setStage as setLocalStage,
+    type HarvestInput,
+    type NewBatchEventInput,
     type NewBatchInput,
 } from './herbStorage'
 // API请求工具，ApiError是自定义API异常类，apiRequest是封装好的http请求函数
@@ -508,6 +515,212 @@ export async function auditHerbBatch(
                 decision: input.decision,
                 reason: input.reason,
                 riskLevel: input.riskLevel,
+            },
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}
+
+
+/**
+ * 追加种植日志。
+ * 操作人、所属组织和事件角色由后端登录身份确定，前端不能伪造。
+ */
+export async function appendHerbEvent(
+    batchId: string,
+    input: NewBatchEventInput,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        return addLocalBatchEvent(batchId, input)
+    }
+
+    if (input.attachments?.length) {
+        throw new Error(
+            '真实数据模式暂未接入图片存储，请移除照片后提交日志',
+        )
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/events`,
+        {
+            method: 'POST',
+            body: {
+                title: input.title,
+                description: input.description,
+                occurredAt: dayjs(input.occurredAt).toISOString(),
+            },
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}
+
+/**
+ * 采收登记。
+ * 后端会在一次原子写入中生成采收事件、阶段变更事件并更新批次阶段。
+ */
+export async function harvestHerbBatch(
+    batchId: string,
+    input: HarvestInput,
+    operator: {
+        userId: string
+        displayName: string
+        growerId?: string
+        growerName?: string
+    },
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        return recordLocalHarvest(
+            batchId,
+            input,
+            operator,
+        )
+    }
+
+    if (input.photos?.length) {
+        throw new Error(
+            '真实数据模式暂未接入图片存储，请移除照片后提交采收登记',
+        )
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/harvest`,
+        {
+            method: 'POST',
+            body: {
+                harvestDate: input.harvestDate,
+                yieldKg: input.yieldKg,
+                plotArea: input.plotArea,
+                harvesterName: input.harvesterName,
+                note: input.note,
+            },
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}
+
+// 加工操作人员信息类型
+export type ProcessorOperator = {
+    displayName: string // 页面展示的操作员名称
+    processorName?: string // 可选 加工商名称
+}
+
+// 加工质检报告提交入参类型
+export type ProcessingQualityReportInput = {
+    note: string // 质检备注
+    attachments?: NonNullable<NewBatchEventInput['attachments']> // 附件列表，可选
+}
+
+/**
+ * 加工商接收批次
+ * demo模式写入本地覆盖层；API模式由服务端绑定加工组织并推进阶段。
+ * @param batchId 批次ID
+ * @param operator 加工操作员信息
+ * @returns 更新后的药材批次业务对象
+ */
+
+export async function receiveProcessingBatch(
+    batchId: string,
+    operator: ProcessorOperator,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        const processorName =
+            operator.processorName
+            ?? operator.displayName
+
+        return setLocalStage(batchId, 'processing', {
+            operatorName: operator.displayName,
+            operatorRole: 'processor',
+            note: `${processorName} 已接收该批次，进入加工中。`,
+        })
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/processing/receive`,
+        {
+            method: 'POST',
+        },
+    )
+
+    // 将后端原始接口数据转换为前端内部业务模型
+    return toDetailedHerbBatch(response.batch)
+}
+
+/**
+ * 完成加工并转入仓储阶段
+ * 阶段更新和溯源事件由服务端原子写入，保证数据一致性
+ * @param batchId 批次ID
+ * @param note 加工完成备注信息
+ * @param operator 加工操作员信息
+ * @returns 更新后的药材批次业务对象
+ */
+export async function completeProcessingBatch(
+    batchId: string,
+    note: string,
+    operator: ProcessorOperator,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        // demo环境：本地修改批次状态为待入库
+        return setLocalStage(batchId, 'warehousing', {
+            operatorName: operator.displayName,
+            operatorRole: 'processor',
+            note,
+        })
+    }
+
+    // 真实环境：请求后端完成加工接口
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/processing/complete`,
+        {
+            method: 'POST',
+            body: {
+                note,
+            },
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}
+
+/**
+ * 保存加工环节质检报告
+ * API 第一版仅支持保存文字摘要；附件功能等待对象存储接入后再启用
+ * @param batchId 批次ID
+ * @param input 质检报告内容（文字+附件）
+ * @param operator 加工操作员信息
+ * @returns 更新后的药材批次业务对象
+ */
+export async function saveProcessingQualityReport(
+    batchId: string,
+    input: ProcessingQualityReportInput,
+    operator: ProcessorOperator,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        return addLocalBatchEvent(batchId, {
+            type: 'qcReport',
+            title: '加工质检报告',
+            description: input.note,
+            occurredAt: dayjs().format('YYYY-MM-DD HH:mm'),
+            operatorName: operator.displayName,
+            operatorRole: 'processor',
+            attachments: input.attachments,
+        })
+    }
+
+    if (input.attachments?.length) {
+        throw new Error(
+            '真实数据模式暂未接入文件存储，请先移除质检附件',
+        )
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/processing/quality-report`,
+        {
+            method: 'POST',
+            body: {
+                summary: input.note,
             },
         },
     )

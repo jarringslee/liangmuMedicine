@@ -65,7 +65,7 @@ function detailFixture(input: {
   id: string
   herbName: string
   auditStatus: 'pending' | 'approved' | 'rejected'
-  stage: 'planting' | 'harvested' | 'processing'
+  stage: 'planting' | 'harvested' | 'processing' | 'warehousing'
   growerId: string
   processorId: string | null
 }): BatchDetailRecord {
@@ -151,7 +151,7 @@ const batches = [
   }),
   detailFixture({
     id: 'two', herbName: '当归', auditStatus: 'approved', stage: 'harvested',
-    growerId: 'org-grower', processorId: 'org-processor',
+    growerId: 'org-grower', processorId: null,
   }),
   detailFixture({
     id: 'three', herbName: '甘草', auditStatus: 'approved', stage: 'processing',
@@ -283,6 +283,183 @@ const batchRepository: BatchRepository = {
       fromStage: null,
       toStage: null,
       createdAt,
+      attachments: [],
+    })
+    return batch
+  },
+  appendEvent: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (!batch) throw new Error('test batch not found')
+    batch.version += 1
+    batch.updatedAt = input.occurredAt
+    batch.events.push({
+      id: `${batch.id}-note-${batch.version}`,
+      type: 'note',
+      title: input.title,
+      description: input.description,
+      payload: null,
+      occurredAt: input.occurredAt,
+      operatorName: input.operatorName,
+      operatorRole: 'grower',
+      visibleRoles: [],
+      fromStage: null,
+      toStage: null,
+      createdAt: input.occurredAt,
+      attachments: [],
+    })
+    return batch
+  },
+  harvest: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (!batch) throw new Error('test batch not found')
+    const changedAt = new Date('2026-09-28T02:00:00.000Z')
+    batch.stage = 'harvested'
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push(
+      {
+        id: `${batch.id}-harvest-${batch.version}`,
+        type: 'note',
+        title: '采收登记',
+        description: `采收日期：${input.harvestDate}\n采收数量：${input.yieldKg.toFixed(2)} kg`,
+        payload: null,
+        occurredAt: input.harvestDateValue,
+        operatorName: input.operatorName,
+        operatorRole: 'grower',
+        visibleRoles: [],
+        fromStage: null,
+        toStage: null,
+        createdAt: changedAt,
+        attachments: [],
+      },
+      {
+        id: `${batch.id}-stage-${batch.version}`,
+        type: 'stageChange',
+        title: '阶段变更：种植中 → 已采收',
+        description: `采收完成：${input.yieldKg.toFixed(2)} kg`,
+        payload: null,
+        occurredAt: changedAt,
+        operatorName: input.operatorName,
+        operatorRole: 'grower',
+        visibleRoles: [],
+        fromStage: 'planting',
+        toStage: 'harvested',
+        createdAt: changedAt,
+        attachments: [],
+      },
+    )
+    return batch
+  },
+  receiveProcessing: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (
+      !batch ||
+      batch.version !== input.expectedVersion ||
+      batch.stage !== 'harvested' ||
+      batch.auditStatus !== 'approved' ||
+      (batch.processorOrganization &&
+        batch.processorOrganization.id !== input.processorOrganizationId)
+    ) return null
+
+    const changedAt = new Date('2026-09-28T03:00:00.000Z')
+    batch.processorOrganization = organization(
+      input.processorOrganizationId,
+      'processor',
+    )
+    batch.stage = 'processing'
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push({
+      id: `${batch.id}-receive-${batch.version}`,
+      type: 'stageChange',
+      title: '阶段变更：已采收 → 加工中',
+      description: '加工商已接收该批次。',
+      payload: null,
+      occurredAt: changedAt,
+      operatorName: input.operatorName,
+      operatorRole: 'processor',
+      visibleRoles: [],
+      fromStage: 'harvested',
+      toStage: 'processing',
+      createdAt: changedAt,
+      attachments: [],
+    })
+    return batch
+  },
+  completeProcessing: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (
+      !batch ||
+      batch.version !== input.expectedVersion ||
+      batch.stage !== 'processing' ||
+      batch.auditStatus !== 'approved' ||
+      batch.processorOrganization?.id !== input.processorOrganizationId
+    ) return null
+
+    const changedAt = new Date('2026-09-28T04:00:00.000Z')
+    batch.stage = 'warehousing'
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push(
+      {
+        id: `${batch.id}-processing-note-${batch.version}`,
+        type: 'note',
+        title: '加工完成记录',
+        description: input.note,
+        payload: null,
+        occurredAt: changedAt,
+        operatorName: input.operatorName,
+        operatorRole: 'processor',
+        visibleRoles: [],
+        fromStage: null,
+        toStage: null,
+        createdAt: changedAt,
+        attachments: [],
+      },
+      {
+        id: `${batch.id}-warehousing-${batch.version}`,
+        type: 'stageChange',
+        title: '阶段变更：加工中 → 仓储',
+        description: '加工完成，批次进入仓储阶段。',
+        payload: null,
+        occurredAt: changedAt,
+        operatorName: input.operatorName,
+        operatorRole: 'processor',
+        visibleRoles: [],
+        fromStage: 'processing',
+        toStage: 'warehousing',
+        createdAt: changedAt,
+        attachments: [],
+      },
+    )
+    return batch
+  },
+  saveProcessingQualityReport: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (
+      !batch ||
+      batch.version !== input.expectedVersion ||
+      !['processing', 'warehousing'].includes(batch.stage) ||
+      batch.auditStatus !== 'approved' ||
+      batch.processorOrganization?.id !== input.processorOrganizationId
+    ) return null
+
+    const changedAt = new Date('2026-09-28T05:00:00.000Z')
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push({
+      id: `${batch.id}-qc-${batch.version}`,
+      type: 'qcReport',
+      title: '加工质检报告',
+      description: input.summary,
+      payload: null,
+      occurredAt: changedAt,
+      operatorName: input.operatorName,
+      operatorRole: 'processor',
+      visibleRoles: [],
+      fromStage: null,
+      toStage: null,
+      createdAt: changedAt,
       attachments: [],
     })
     return batch
@@ -493,4 +670,161 @@ test('只有管理员可以审核，审核同时写入状态、记录和事件',
 
   const buyerCanRead = await get(`/api/batches/${created.traceCode}`, 'buyer')
   assert.equal(buyerCanRead.status, 200)
+})
+
+test('种植商只能给自己的种植中批次追加日志', async () => {
+  const before = batches[0]!.events.filter(
+    (event) => event.visibleRoles.length === 0 || event.visibleRoles.includes('grower'),
+  ).length
+  const response = await send(
+    '/api/batches/one/events',
+    'grower',
+    'POST',
+    {
+      title: '苗期巡查',
+      description: '长势正常，无明显病虫害。',
+      occurredAt: '2026-09-27T08:30:00.000Z',
+    },
+  )
+  assert.equal(response.status, 201)
+  const batch = (await response.json()).batch
+  assert.equal(batch.events.length, before + 1)
+  assert.equal(batch.events.at(-1).operatorName, 'grower 测试用户')
+
+  const otherOrganization = await send(
+    '/api/batches/three/events',
+    'grower',
+    'POST',
+    {
+      title: '越权日志',
+      description: '不应写入',
+      occurredAt: '2026-09-27T08:30:00.000Z',
+    },
+  )
+  assert.equal(otherOrganization.status, 404)
+
+  const adminForbidden = await send(
+    '/api/batches/one/events',
+    'admin',
+    'POST',
+    {
+      title: '管理员日志',
+      description: '不应写入',
+      occurredAt: '2026-09-27T08:30:00.000Z',
+    },
+  )
+  assert.equal(adminForbidden.status, 403)
+})
+
+test('采收登记原子生成两条事件并推进阶段，重复采收被拒绝', async () => {
+  const before = batches[0]!.events.filter(
+    (event) => event.visibleRoles.length === 0 || event.visibleRoles.includes('grower'),
+  ).length
+  const response = await send(
+    '/api/batches/one/harvest',
+    'grower',
+    'POST',
+    {
+      harvestDate: '2026-09-28',
+      yieldKg: 128.5,
+      plotArea: '一号地块',
+      harvesterName: '测试采收员',
+      note: '天气晴朗',
+    },
+  )
+  assert.equal(response.status, 200)
+  const batch = (await response.json()).batch
+  assert.equal(batch.stage, 'harvested')
+  assert.equal(batch.events.length, before + 2)
+  assert.equal(batch.events.at(-2).title, '采收登记')
+  assert.equal(batch.events.at(-1).type, 'stageChange')
+  assert.equal(batch.events.at(-1).fromStage, 'planting')
+  assert.equal(batch.events.at(-1).toStage, 'harvested')
+
+  const repeated = await send(
+    '/api/batches/one/harvest',
+    'grower',
+    'POST',
+    { harvestDate: '2026-09-28', yieldKg: 1 },
+  )
+  assert.equal(repeated.status, 409)
+  assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
+})
+
+test('加工商可以认领未分配批次，并绑定当前加工组织', async () => {
+  const response = await send(
+    '/api/batches/two/processing/receive',
+    'processor',
+    'POST',
+    {},
+  )
+  assert.equal(response.status, 200)
+  const batch = (await response.json()).batch
+  assert.equal(batch.stage, 'processing')
+  assert.equal(batch.processorOrganization.id, 'org-processor')
+  assert.equal(batch.events.at(-1).type, 'stageChange')
+  assert.equal(batch.events.at(-1).fromStage, 'harvested')
+  assert.equal(batch.events.at(-1).toStage, 'processing')
+
+  const repeated = await send(
+    '/api/batches/two/processing/receive',
+    'processor',
+    'POST',
+    {},
+  )
+  assert.equal(repeated.status, 409)
+  assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
+})
+
+test('加工完成会写入加工记录和阶段事件，并进入仓储', async () => {
+  const response = await send(
+    '/api/batches/two/processing/complete',
+    'processor',
+    'POST',
+    { note: '完成净选、切制和干燥。' },
+  )
+  assert.equal(response.status, 200)
+  const batch = (await response.json()).batch
+  assert.equal(batch.stage, 'warehousing')
+  assert.equal(batch.events.at(-2).title, '加工完成记录')
+  assert.equal(batch.events.at(-1).fromStage, 'processing')
+  assert.equal(batch.events.at(-1).toStage, 'warehousing')
+
+  const repeated = await send(
+    '/api/batches/two/processing/complete',
+    'processor',
+    'POST',
+    { note: '重复加工' },
+  )
+  assert.equal(repeated.status, 409)
+  assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
+})
+
+test('加工商可以保存质检摘要，但不能操作其他组织批次', async () => {
+  const response = await send(
+    '/api/batches/two/processing/quality-report',
+    'processor',
+    'POST',
+    { summary: '水分、灰分和外观性状符合内部入库标准。' },
+  )
+  assert.equal(response.status, 201)
+  const batch = (await response.json()).batch
+  assert.equal(batch.events.at(-1).type, 'qcReport')
+  assert.equal(batch.events.at(-1).operatorRole, 'processor')
+
+  const otherOrganization = await send(
+    '/api/batches/three/processing/quality-report',
+    'processor',
+    'POST',
+    { summary: '不应写入' },
+  )
+  assert.equal(otherOrganization.status, 404)
+
+  const growerForbidden = await send(
+    '/api/batches/two/processing/quality-report',
+    'grower',
+    'POST',
+    { summary: '不应写入' },
+  )
+  assert.equal(growerForbidden.status, 403)
 })

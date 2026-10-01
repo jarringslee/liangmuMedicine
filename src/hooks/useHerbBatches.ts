@@ -18,7 +18,6 @@ import type { HerbBatch } from '../types/herb'
 import type { BatchEvent, Stage } from '../types/herb'
 import {
   addBatchEvent,
-  recordHarvest,
   updateBatch,
   type HarvestInput,
   type NewBatchEventInput,
@@ -27,12 +26,19 @@ import {
 
 import { authMode } from '../config/api'
 import {
+  appendHerbEvent,
   auditHerbBatch,
+  completeProcessingBatch,
   createHerbBatch,
   getHerbBatchById,
   getHerbBatchByTraceCode,
+  harvestHerbBatch,
   listHerbBatches,
+  receiveProcessingBatch,
+  saveProcessingQualityReport,
   type AuditHerbBatchInput,
+  type ProcessingQualityReportInput,
+  type ProcessorOperator,
 } from '../services/herbDataSource'
 
 /** 全局 queryKey 集中管理，避免散落字符串 */
@@ -116,8 +122,13 @@ export function useHerbBatchMutations() {
     onSuccess: invalidate,
   })
   const addEvent = useMutation({
-    mutationFn: ({ batchId, input }: { batchId: string; input: NewBatchEventInput }) =>
-      addBatchEvent(batchId, input),
+    mutationFn: ({
+      batchId,
+      input,
+    }: {
+      batchId: string
+      input: NewBatchEventInput
+    }) => appendHerbEvent(batchId, input),
     onSuccess: invalidate,
   })
   const setStage = useMutation({
@@ -153,11 +164,76 @@ export function useHerbBatchMutations() {
       batchId: string
       input: HarvestInput
       operator: { userId: string; displayName: string; growerId?: string; growerName?: string }
-    }) => recordHarvest(batchId, input, operator),
+    }) => harvestHerbBatch(
+      batchId,
+      input,
+      operator,
+    ),
     onSuccess: invalidate,
   })
 
-  return { create, update, setAudit, addEvent, setStage, harvest }
+  // 加工商接收批次
+  const receiveProcessing = useMutation({
+    // mutationFn：实际执行的异步业务函数
+    mutationFn: ({
+      batchId,
+      operator,
+    }: {
+      batchId: string
+      operator: ProcessorOperator
+    }) => receiveProcessingBatch(batchId, operator),
+    // 操作成功后，让批次相关缓存失效，自动重新拉取最新数据
+    onSuccess: invalidate,
+  })
+
+  // 完成加工，批次流转进入仓储阶段
+  const completeProcessing = useMutation({
+    mutationFn: ({
+      batchId,
+      note,
+      operator,
+    }: {
+      batchId: string
+      note: string
+      operator: ProcessorOperator
+    }) => completeProcessingBatch(
+      batchId,
+      note,
+      operator,
+    ),
+    onSuccess: invalidate,
+  })
+
+  // 保存加工环节质检报告记录
+  const saveQualityReport = useMutation({
+    mutationFn: ({
+      batchId,
+      input,
+      operator,
+    }: {
+      batchId: string
+      input: ProcessingQualityReportInput
+      operator: ProcessorOperator
+    }) => saveProcessingQualityReport(
+      batchId,
+      input,
+      operator,
+    ),
+    onSuccess: invalidate,
+  })
+
+
+  return {
+    create,
+    update,
+    setAudit,
+    addEvent,
+    setStage,
+    harvest,
+    receiveProcessing,
+    completeProcessing,
+    saveQualityReport,
+  }
 }
 
 /**

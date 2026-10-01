@@ -30,8 +30,11 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
-import { recordHarvest } from '../../../services/herbStorage'
+import {
+  useHerbBatchMutations,
+  useHerbBatches,
+} from '../../../hooks/useHerbBatches'
+import { authMode } from '../../../config/api'
 import { STAGE_LABEL } from '../../../types/herb'
 import '../../dashboard/index.less'
 import '../logs/logs.less'
@@ -67,8 +70,9 @@ export default function GrowerHarvestNewPage() {
   const { session } = useAuth()
   const { data } = useHerbBatches()
 
+  const { harvest } = useHerbBatchMutations()
+
   const [form] = Form.useForm<FormValues>()
-  const [submitting, setSubmitting] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [savedTraceCode, setSavedTraceCode] = useState<string | null>(null)
@@ -81,8 +85,8 @@ export default function GrowerHarvestNewPage() {
     () =>
       growerId
         ? data.filter(
-            (b) => b.growerId === growerId && b.stage === 'planting' && b.auditStatus !== 'rejected',
-          )
+          (b) => b.growerId === growerId && b.stage === 'planting' && b.auditStatus !== 'rejected',
+        )
         : [],
     [data, growerId],
   )
@@ -141,34 +145,32 @@ export default function GrowerHarvestNewPage() {
       return
     }
 
-    setSubmitting(true)
     try {
-      await recordHarvest(
-        batch.id,
-        {
+      await harvest.mutateAsync({
+        batchId: batch.id,
+        input: {
           harvestDate: values.harvestDate.format('YYYY-MM-DD'),
           yieldKg: values.yieldKg,
           plotArea: values.plotArea?.trim() || undefined,
-          harvesterName: values.harvesterName?.trim() || undefined,
+          harvesterName:
+            values.harvesterName?.trim() || undefined,
           note: values.note?.trim() || undefined,
           photos: photoUrls.map((url, i) => ({
             name: `采收现场${i + 1}.jpg`,
             url,
           })),
         },
-        {
+        operator: {
           userId: session?.userId ?? '',
           displayName: growerName,
           growerId,
           growerName,
         },
-      )
+      })
       setSavedTraceCode(batch.traceCode)
       message.success('采收登记已保存，阶段已流转至「已采收」')
     } catch (e) {
       message.error(`保存失败：${(e as Error).message}`)
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -334,6 +336,7 @@ export default function GrowerHarvestNewPage() {
                 <Form.Item label={`现场照片（可选，最多 ${MAX_PHOTOS} 张）`}>
                   <Upload
                     accept="image/*"
+                    disabled={authMode === 'api'}
                     fileList={fileList}
                     beforeUpload={handlePhotoUpload}
                     onRemove={(file) => {
@@ -353,13 +356,15 @@ export default function GrowerHarvestNewPage() {
                     ) : null}
                   </Upload>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    演示环境以 base64 存于本地，阶段将流转至「{STAGE_LABEL.harvested}」
+                    {authMode === 'api'
+                      ? '真实数据模式暂未接入对象存储；文字信息仍可正常提交并推进阶段'
+                      : `演示环境以 base64 存于本地，阶段将流转至「${STAGE_LABEL.harvested}」`}
                   </Text>
                 </Form.Item>
 
                 <Form.Item style={{ marginBottom: 0 }}>
                   <Space>
-                    <Button type="primary" htmlType="submit" loading={submitting}>
+                    <Button type="primary" htmlType="submit" loading={harvest.isPending}>
                       提交采收登记
                     </Button>
                     <Button onClick={() => navigate('/grower/harvest')}>取消</Button>

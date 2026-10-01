@@ -168,6 +168,28 @@ export type AuditBatchInput = {
     riskLevel?: RiskLevel
 }
 
+export type AppendBatchEventInput = {
+    title: string
+    description: string
+    occurredAt: string
+}
+
+export type HarvestBatchInput = {
+    harvestDate: string
+    yieldKg: number
+    plotArea?: string
+    harvesterName?: string
+    note?: string
+}
+
+export type CompleteProcessingInput = {
+    note: string
+}
+
+export type ProcessingQualityReportInput = {
+    summary: string
+}
+
 // 内部类型：传给数据库查询层的参数
 type BatchListRepositoryInput = { // 转译后给 prisma 用的查询参数
     where: Prisma.HerbBatchWhereInput // prisma查询的筛选条件对象
@@ -193,6 +215,38 @@ type BatchAuditRepositoryInput = {
     reviewerName: string
 }
 
+type BatchEventRepositoryInput = {
+    batchId: string
+    title: string
+    description: string
+    occurredAt: Date
+    operatorId: string
+    operatorName: string
+}
+
+type BatchHarvestRepositoryInput = HarvestBatchInput & {
+    batchId: string
+    harvestDateValue: Date
+    operatorId: string
+    operatorName: string
+}
+
+type ProcessorRepositoryInput = {
+    batchId: string
+    expectedVersion: number
+    processorOrganizationId: string
+    operatorId: string
+    operatorName: string
+}
+
+type CompleteProcessingRepositoryInput = ProcessorRepositoryInput & {
+    note: string
+}
+
+type ProcessingQualityReportRepositoryInput = ProcessorRepositoryInput & {
+    summary: string
+}
+
 // 导出接口：定义批次数据仓库的方法契约
 export interface BatchRepository {
     count(where: Prisma.HerbBatchWhereInput): Promise<number>
@@ -203,6 +257,11 @@ export interface BatchRepository {
     // findOne：查询单条批次详情；找到返回详情对象，没找到返回null
     create(input: BatchCreateRepositoryInput): Promise<BatchDetailRecord>
     audit(input: BatchAuditRepositoryInput): Promise<BatchDetailRecord>
+    appendEvent(input: BatchEventRepositoryInput): Promise<BatchDetailRecord>
+    harvest(input: BatchHarvestRepositoryInput): Promise<BatchDetailRecord>
+    receiveProcessing(input: ProcessorRepositoryInput): Promise<BatchDetailRecord | null>
+    completeProcessing(input: CompleteProcessingRepositoryInput): Promise<BatchDetailRecord | null>
+    saveProcessingQualityReport(input: ProcessingQualityReportRepositoryInput): Promise<BatchDetailRecord | null>
 }
 
 // 创建实例，实现上面 BatchRepository 接口
@@ -307,6 +366,209 @@ const repository: BatchRepository = {
             },
             select: batchDetailSelect,
         }),
+
+    appendEvent: (input) =>
+        prisma.herbBatch.update({
+            where: { id: input.batchId },
+            data: {
+                version: { increment: 1 },
+                events: {
+                    create: {
+                        type: 'note',
+                        title: input.title,
+                        description: input.description,
+                        occurredAt: input.occurredAt,
+                        operator: {
+                            connect: { id: input.operatorId },
+                        },
+                        operatorName: input.operatorName,
+                        operatorRole: 'grower',
+                        visibleRoles: [],
+                    },
+                },
+            },
+            select: batchDetailSelect,
+        }),
+
+    // 阶段、采收事件和阶段变更事件在同一次 nested write 中提交。
+    harvest: (input) => {
+        const description =
+            `采收日期：${input.harvestDate}\n` +
+            `采收数量：${input.yieldKg.toFixed(2)} kg` +
+            (input.plotArea ? `\n采收地块：${input.plotArea}` : '') +
+            (input.harvesterName ? `\n采收人员：${input.harvesterName}` : '') +
+            (input.note ? `\n备注：${input.note}` : '')
+
+        return prisma.herbBatch.update({
+            where: { id: input.batchId },
+            data: {
+                stage: 'harvested',
+                version: { increment: 1 },
+                events: {
+                    create: [
+                        {
+                            type: 'note',
+                            title: '采收登记',
+                            description,
+                            occurredAt: input.harvestDateValue,
+                            operator: {
+                                connect: { id: input.operatorId },
+                            },
+                            operatorName: input.operatorName,
+                            operatorRole: 'grower',
+                            visibleRoles: [],
+                        },
+                        {
+                            type: 'stageChange',
+                            title: '阶段变更：种植中 → 已采收',
+                            description: `采收完成：${input.yieldKg.toFixed(2)} kg`,
+                            occurredAt: new Date(),
+                            operator: {
+                                connect: { id: input.operatorId },
+                            },
+                            operatorName: input.operatorName,
+                            operatorRole: 'grower',
+                            visibleRoles: [],
+                            fromStage: 'planting',
+                            toStage: 'harvested',
+                        },
+                    ],
+                },
+            },
+            select: batchDetailSelect,
+        })
+    },
+
+    receiveProcessing: (input) => prisma.$transaction(async (transaction) => {
+        const changedAt = new Date()
+        const claimed = await transaction.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: 'harvested',
+                auditStatus: 'approved',
+                OR: [
+                    { processorOrganizationId: null },
+                    { processorOrganizationId: input.processorOrganizationId },
+                ],
+            },
+            data: {
+                processorOrganizationId: input.processorOrganizationId,
+                stage: 'processing',
+                version: { increment: 1 },
+            },
+        })
+        if (claimed.count !== 1) return null
+
+        await transaction.batchEvent.create({
+            data: {
+                batchId: input.batchId,
+                type: 'stageChange',
+                title: '阶段变更：已采收 → 加工中',
+                description: '加工商已接收该批次。',
+                occurredAt: changedAt,
+                operatorId: input.operatorId,
+                operatorName: input.operatorName,
+                operatorRole: 'processor',
+                visibleRoles: [],
+                fromStage: 'harvested',
+                toStage: 'processing',
+            },
+        })
+
+        return transaction.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+    }),
+
+    completeProcessing: (input) => prisma.$transaction(async (transaction) => {
+        const changedAt = new Date()
+        const completed = await transaction.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: 'processing',
+                auditStatus: 'approved',
+                processorOrganizationId: input.processorOrganizationId,
+            },
+            data: {
+                stage: 'warehousing',
+                version: { increment: 1 },
+            },
+        })
+        if (completed.count !== 1) return null
+
+        await transaction.batchEvent.createMany({
+            data: [
+                {
+                    batchId: input.batchId,
+                    type: 'note',
+                    title: '加工完成记录',
+                    description: input.note,
+                    occurredAt: changedAt,
+                    operatorId: input.operatorId,
+                    operatorName: input.operatorName,
+                    operatorRole: 'processor',
+                    visibleRoles: [],
+                },
+                {
+                    batchId: input.batchId,
+                    type: 'stageChange',
+                    title: '阶段变更：加工中 → 仓储',
+                    description: '加工完成，批次进入仓储阶段。',
+                    occurredAt: changedAt,
+                    operatorId: input.operatorId,
+                    operatorName: input.operatorName,
+                    operatorRole: 'processor',
+                    visibleRoles: [],
+                    fromStage: 'processing',
+                    toStage: 'warehousing',
+                },
+            ],
+        })
+
+        return transaction.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+    }),
+
+    saveProcessingQualityReport: (input) => prisma.$transaction(async (transaction) => {
+        const changedAt = new Date()
+        const recorded = await transaction.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: { in: ['processing', 'warehousing'] },
+                auditStatus: 'approved',
+                processorOrganizationId: input.processorOrganizationId,
+            },
+            data: {
+                version: { increment: 1 },
+            },
+        })
+        if (recorded.count !== 1) return null
+
+        await transaction.batchEvent.create({
+            data: {
+                batchId: input.batchId,
+                type: 'qcReport',
+                title: '加工质检报告',
+                description: input.summary,
+                occurredAt: changedAt,
+                operatorId: input.operatorId,
+                operatorName: input.operatorName,
+                operatorRole: 'processor',
+                visibleRoles: [],
+            },
+        })
+
+        return transaction.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+    }),
 }
 
 // 函数：从登录用户信息取出组织ID，没有就抛403权限错误
@@ -340,8 +602,17 @@ function visibilityWhere(user: AuthUser): Prisma.HerbBatchWhereInput {
             }
         case 'processor':
             return {
-                // 加工商同种植商
-                processorOrganizationId: requireOrganizationId(user),
+                // 已认领批次只对所属加工组织可见；未分配且可加工的批次进入共享待认领池。
+                OR: [
+                    {
+                        processorOrganizationId: requireOrganizationId(user),
+                    },
+                    {
+                        processorOrganizationId: null,
+                        auditStatus: 'approved',
+                        stage: 'harvested',
+                    },
+                ],
             }
         case 'buyer':
             return {
@@ -472,6 +743,31 @@ function newBatchCodes() {
     }
 }
 
+/** 项目业务日期按中国标准时间判断，避免 UTC 服务器在凌晨误判“今天”。 */
+function currentBusinessDate(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date())
+}
+
+function assertGrowerCanRecord(
+    user: AuthUser,
+    batch: BatchDetailRecord,
+) {
+    if (user.role !== 'grower') {
+        throw new HttpError(403, 'FORBIDDEN', '仅种植商可以记录生产信息')
+    }
+    if (batch.auditStatus === 'rejected') {
+        throw new HttpError(409, 'BATCH_REJECTED', '该批次已被驳回，暂不能继续记录')
+    }
+    if (batch.stage !== 'planting') {
+        throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅种植中批次可以执行该操作')
+    }
+}
+
 // 工厂函数：创建批次业务服务，依赖 BatchRepository
 export function createBatchService(
     batches: BatchRepository = repository,
@@ -537,9 +833,7 @@ export function createBatchService(
             const plantingStartDateValue = new Date(
                 `${input.plantingStartDate}T00:00:00.000Z`,
             )
-            const today = new Date()
-            today.setUTCHours(23, 59, 59, 999)
-            if (plantingStartDateValue > today) {
+            if (input.plantingStartDate > currentBusinessDate()) {
                 throw new HttpError(
                     400,
                     'INVALID_PLANTING_DATE',
@@ -595,6 +889,206 @@ export function createBatchService(
                 reviewerName: user.displayName,
             })
 
+            return filterDetailForRole(batch, user)
+        },
+
+        async appendEvent(
+            user: AuthUser,
+            identifier: string,
+            input: AppendBatchEventInput,
+        ) {
+            if (user.role !== 'grower') {
+                throw new HttpError(403, 'FORBIDDEN', '仅种植商可以记录种植日志')
+            }
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            assertGrowerCanRecord(user, current)
+
+            const occurredAt = new Date(input.occurredAt)
+            if (occurredAt.getTime() > Date.now() + 5 * 60 * 1000) {
+                throw new HttpError(400, 'INVALID_EVENT_TIME', '记录时间不能晚于当前时间')
+            }
+            const batch = await batches.appendEvent({
+                batchId: current.id,
+                title: input.title,
+                description: input.description,
+                occurredAt,
+                operatorId: user.id,
+                operatorName: user.displayName,
+            })
+            return filterDetailForRole(batch, user)
+        },
+
+        async harvest(
+            user: AuthUser,
+            identifier: string,
+            input: HarvestBatchInput,
+        ) {
+            if (user.role !== 'grower') {
+                throw new HttpError(403, 'FORBIDDEN', '仅种植商可以登记采收')
+            }
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            assertGrowerCanRecord(user, current)
+
+            const harvestDateValue = new Date(
+                `${input.harvestDate}T00:00:00+08:00`,
+            )
+            if (input.harvestDate > currentBusinessDate()) {
+                throw new HttpError(400, 'INVALID_HARVEST_DATE', '采收日期不能晚于今天')
+            }
+
+            const batch = await batches.harvest({
+                ...input,
+                batchId: current.id,
+                harvestDateValue,
+                operatorId: user.id,
+                operatorName: user.displayName,
+            })
+            return filterDetailForRole(batch, user)
+        },
+
+        async receiveProcessing(
+            user: AuthUser,
+            identifier: string,
+        ) {
+            if (user.role !== 'processor') {
+                throw new HttpError(403, 'FORBIDDEN', '仅加工商可以接收加工批次')
+            }
+            const processorOrganizationId = requireOrganizationId(user)
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            if (current.auditStatus !== 'approved') {
+                throw new HttpError(409, 'BATCH_NOT_APPROVED', '仅审核通过的批次可以接收加工')
+            }
+            if (current.stage !== 'harvested') {
+                throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅已采收批次可以接收加工')
+            }
+
+            const batch = await batches.receiveProcessing({
+                batchId: current.id,
+                expectedVersion: current.version,
+                processorOrganizationId,
+                operatorId: user.id,
+                operatorName: user.displayName,
+            })
+            if (!batch) {
+                throw new HttpError(
+                    409,
+                    'BATCH_STATE_CHANGED',
+                    '批次已被其他加工商接收或状态已变更，请刷新后重试',
+                )
+            }
+            return filterDetailForRole(batch, user)
+        },
+
+        async completeProcessing(
+            user: AuthUser,
+            identifier: string,
+            input: CompleteProcessingInput,
+        ) {
+            if (user.role !== 'processor') {
+                throw new HttpError(403, 'FORBIDDEN', '仅加工商可以完成加工')
+            }
+            const processorOrganizationId = requireOrganizationId(user)
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            if (current.processorOrganization?.id !== processorOrganizationId) {
+                throw new HttpError(404, 'BATCH_NOT_FOUND', '药材批次不存在或无权查看')
+            }
+            if (current.auditStatus !== 'approved') {
+                throw new HttpError(409, 'BATCH_NOT_APPROVED', '仅审核通过的批次可以完成加工')
+            }
+            if (current.stage !== 'processing') {
+                throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅加工中批次可以完成加工')
+            }
+
+            const batch = await batches.completeProcessing({
+                batchId: current.id,
+                expectedVersion: current.version,
+                processorOrganizationId,
+                operatorId: user.id,
+                operatorName: user.displayName,
+                note: input.note,
+            })
+            if (!batch) {
+                throw new HttpError(409, 'BATCH_STATE_CHANGED', '批次状态已变更，请刷新后重试')
+            }
+            return filterDetailForRole(batch, user)
+        },
+
+        async saveProcessingQualityReport(
+            user: AuthUser,
+            identifier: string,
+            input: ProcessingQualityReportInput,
+        ) {
+            if (user.role !== 'processor') {
+                throw new HttpError(403, 'FORBIDDEN', '仅加工商可以保存加工质检记录')
+            }
+            const processorOrganizationId = requireOrganizationId(user)
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            if (current.processorOrganization?.id !== processorOrganizationId) {
+                throw new HttpError(404, 'BATCH_NOT_FOUND', '药材批次不存在或无权查看')
+            }
+            if (current.auditStatus !== 'approved') {
+                throw new HttpError(409, 'BATCH_NOT_APPROVED', '仅审核通过的批次可以保存质检记录')
+            }
+            if (!['processing', 'warehousing'].includes(current.stage)) {
+                throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅加工中或仓储批次可以保存质检记录')
+            }
+
+            const batch = await batches.saveProcessingQualityReport({
+                batchId: current.id,
+                expectedVersion: current.version,
+                processorOrganizationId,
+                operatorId: user.id,
+                operatorName: user.displayName,
+                summary: input.summary,
+            })
+            if (!batch) {
+                throw new HttpError(409, 'BATCH_STATE_CHANGED', '批次状态已变更，请刷新后重试')
+            }
             return filterDetailForRole(batch, user)
         },
     }

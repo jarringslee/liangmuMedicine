@@ -1,6 +1,6 @@
 # liangmuMedicine Server
 
-良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已完成 V2 模型、migration、seed、数据库健康检查、登录/JWT 身份校验、RBAC 角色守卫、按角色和组织过滤的批次读取，以及种植商建档和管理员审核写接口；React 已接入这些能力。
+良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已完成 V2 模型、migration、seed、数据库健康检查、登录/JWT 身份校验、RBAC 角色守卫、按角色和组织过滤的批次读取，以及建档、审核、种植日志、采收、加工认领、加工完成和质检摘要写接口；React 已接入这些能力。
 
 ## 当前能力
 
@@ -15,7 +15,8 @@
 - 一小时 Access Token、登录限流及统一错误响应
 - 批次分页、搜索、阶段/审核/风险筛选和 ID/溯源码详情查询
 - 管理员、种植商、加工商和采购商的批次行级读取范围及详情字段过滤
-- 不修改真实数据库的鉴权与批次接口自动化测试
+- 未分配批次共享待认领、认领后组织隔离与版本并发保护
+- 不修改真实数据库的 32 项鉴权与批次接口自动化测试
 
 ## 本地准备
 
@@ -175,7 +176,7 @@ MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删�
 
 - admin：全部批次
 - grower：本种植组织批次
-- processor：分配给本加工组织的批次
+- processor：本加工组织已认领的批次，以及审核通过、已采收且未分配的共享待认领批次
 - buyer：审核通过的批次
 
 详情继续按 `visibleRoles` 过滤事件，完整审核历史暂只向管理员返回。不可见批次与不存在批次统一返回 404，避免通过接口枚举其他组织的数据。
@@ -184,13 +185,18 @@ MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删�
 
 - `POST /api/batches`：仅种植商可调用；服务端从认证身份派生种植组织与创建人，固定生成 `planting + pending + normal` 初始状态，并原子写入建档事件
 - `PATCH /api/batches/:identifier/audit`：仅管理员可调用；接收 `approved/rejected`、可选原因与风险等级，原子更新状态、审核记录、审核事件和版本号
+- `POST /api/batches/:identifier/events`：仅所属种植组织可追加种植日志，操作人由登录身份生成
+- `POST /api/batches/:identifier/harvest`：仅所属种植组织可登记采收，原子写入采收事件、阶段变更事件，并将 `planting` 推进为 `harvested`
+- `POST /api/batches/:identifier/processing/receive`：加工商认领未分配批次，绑定当前加工组织并推进为 `processing`
+- `POST /api/batches/:identifier/processing/complete`：本加工组织写入加工记录与阶段事件，推进为 `warehousing`
+- `POST /api/batches/:identifier/processing/quality-report`：本加工组织为加工中或仓储批次保存质检文字摘要
 
-请求体使用 Zod 严格校验，不接受客户端提交组织、创建人、初始审核状态等可信字段。事件追加、采收、加工和阶段流转仍未接入后端。
+请求体使用 Zod 严格校验，不接受客户端提交组织、创建人、事件操作人和初始审核状态等可信字段。加工操作通过登录身份绑定组织，使用 `version` 条件更新避免两个加工商同时认领。业务日期按 `Asia/Shanghai` 判断，避免 UTC 服务器在中国时区凌晨误判“今天”。
 
 ## 下一阶段
 
 前端开发模式通过 Vite 将 `/api` 代理到本服务；生产构建默认使用独立的 demo 认证，不要求静态托管平台运行本服务。环境切换与请求层说明见根目录 README。
 
-1. 推进事件追加、采收、加工和阶段流转写接口，不继续扩展独立后端基础设施
-2. 接入真实附件存储并补充关键业务接口测试
+1. 补齐仓储复核、出库/运输与采购确认
+2. 接入真实附件存储并补充前端页面测试
 3. AI 审核 Agent、RAG 和实时通知

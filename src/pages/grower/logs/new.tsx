@@ -29,8 +29,11 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useAuth } from '../../../hooks/useAuth'
-import { addBatchEvent } from '../../../services/herbStorage'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import {
+  useHerbBatchMutations,
+  useHerbBatches,
+} from '../../../hooks/useHerbBatches'
+import { authMode } from '../../../config/api'
 import '../../dashboard/index.less'
 import '../../admin/herbs/herbs.less'
 
@@ -64,8 +67,9 @@ export default function GrowerLogNewPage() {
   const { session } = useAuth()
   const { data } = useHerbBatches()
 
+  const { addEvent } = useHerbBatchMutations()
+
   const [form] = Form.useForm<FormValues>()
-  const [submitting, setSubmitting] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [savedTraceCode, setSavedTraceCode] = useState<string | null>(null)
@@ -78,8 +82,8 @@ export default function GrowerLogNewPage() {
     () =>
       growerId
         ? data.filter(
-            (b) => b.growerId === growerId && b.stage === 'planting' && b.auditStatus !== 'rejected',
-          )
+          (b) => b.growerId === growerId && b.stage === 'planting' && b.auditStatus !== 'rejected',
+        )
         : [],
     [data, growerId],
   )
@@ -139,29 +143,29 @@ export default function GrowerLogNewPage() {
       return
     }
 
-    setSubmitting(true)
     try {
-      await addBatchEvent(batch.id, {
-        type: 'note',
-        title: values.title.trim(),
-        description: values.description.trim(),
-        occurredAt: formatOccurredAt(values.occurredAt),
-        operatorName: growerName,
-        operatorRole: 'grower',
-        attachments:
-          photoUrls.length > 0
-            ? photoUrls.map((url, i) => ({
+      await addEvent.mutateAsync({
+        batchId: batch.id,
+        input: {
+          type: 'note',
+          title: values.title.trim(),
+          description: values.description.trim(),
+          occurredAt: formatOccurredAt(values.occurredAt),
+          operatorName: growerName,
+          operatorRole: 'grower',
+          attachments:
+            photoUrls.length > 0
+              ? photoUrls.map((url, i) => ({
                 name: `现场照片${i + 1}.jpg`,
                 url,
               }))
-            : undefined,
+              : undefined,
+        },
       })
       setSavedTraceCode(batch.traceCode)
       message.success('种植日志已保存')
     } catch (e) {
       message.error(`保存失败：${(e as Error).message}`)
-    } finally {
-      setSubmitting(false)
     }
   }
 
@@ -311,6 +315,7 @@ export default function GrowerLogNewPage() {
                 <Form.Item label="现场照片（可选，最多 4 张）">
                   <Upload
                     accept="image/*"
+                    disabled={authMode === 'api'}
                     fileList={fileList}
                     beforeUpload={handlePhotoUpload}
                     onRemove={(file) => {
@@ -330,13 +335,15 @@ export default function GrowerLogNewPage() {
                     ) : null}
                   </Upload>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    演示环境以 base64 存于本地，正式接入后可上传至对象存储
+                    {authMode === 'api'
+                      ? '真实数据模式暂未接入对象存储，本阶段不可上传照片'
+                      : '演示环境以 base64 存于本地'}
                   </Text>
                 </Form.Item>
 
                 <Form.Item style={{ marginBottom: 0 }}>
                   <Space>
-                    <Button type="primary" htmlType="submit" loading={submitting}>
+                    <Button type="primary" htmlType="submit" loading={addEvent.isPending}>
                       保存日志
                     </Button>
                     <Button onClick={() => navigate('/grower/logs')}>取消</Button>

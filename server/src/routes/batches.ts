@@ -8,10 +8,14 @@ import { z } from 'zod'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import type { AuthService } from '../services/auth.js'
 import type {
+    AppendBatchEventInput,
     AuditBatchInput,
     BatchListQuery,
     BatchService,
+    CompleteProcessingInput,
     CreateBatchInput,
+    HarvestBatchInput,
+    ProcessingQualityReportInput,
 } from '../services/batches.js'
 
 // ========== Zod参数校验模板：列表查询参数规则 ==========
@@ -117,6 +121,31 @@ const auditBatchSchema = z.object({
     ]).optional(),
 }).strict()
 
+const appendEventSchema = z.object({
+    title: z.string().trim().min(1).max(40),
+    description: z.string().trim().min(1).max(500),
+    occurredAt: z.string().refine(
+        (value) => !Number.isNaN(new Date(value).getTime()),
+        '记录时间格式不正确',
+    ),
+}).strict()
+
+const harvestBatchSchema = z.object({
+    harvestDate: isoDateSchema,
+    yieldKg: z.number().positive().max(10_000_000),
+    plotArea: z.string().trim().min(1).max(100).optional(),
+    harvesterName: z.string().trim().min(1).max(50).optional(),
+    note: z.string().trim().min(1).max(500).optional(),
+}).strict()
+
+const completeProcessingSchema = z.object({
+    note: z.string().trim().min(1).max(500),
+}).strict()
+
+const processingQualityReportSchema = z.object({
+    summary: z.string().trim().min(1).max(500),
+}).strict()
+
 /**
 * 创建批次模块路由工厂函数
 * 接收认证服务、批次业务服务实例，返回配置好的express路由对象
@@ -203,6 +232,87 @@ export function createBatchRouter(
                 input,
             )
             res.json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/events',
+        requireRoles('grower'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const input = appendEventSchema.parse(
+                req.body,
+            ) as AppendBatchEventInput
+            const batch = await batchService.appendEvent(
+                req.auth!,
+                identifier,
+                input,
+            )
+            res.status(201).json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/harvest',
+        requireRoles('grower'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const input = harvestBatchSchema.parse(
+                req.body,
+            ) as HarvestBatchInput
+            const batch = await batchService.harvest(
+                req.auth!,
+                identifier,
+                input,
+            )
+            res.json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/processing/receive',
+        requireRoles('processor'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const batch = await batchService.receiveProcessing(
+                req.auth!,
+                identifier,
+            )
+            res.json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/processing/complete',
+        requireRoles('processor'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const input = completeProcessingSchema.parse(
+                req.body,
+            ) as CompleteProcessingInput
+            const batch = await batchService.completeProcessing(
+                req.auth!,
+                identifier,
+                input,
+            )
+            res.json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/processing/quality-report',
+        requireRoles('processor'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const input = processingQualityReportSchema.parse(
+                req.body,
+            ) as ProcessingQualityReportInput
+            const batch = await batchService.saveProcessingQualityReport(
+                req.auth!,
+                identifier,
+                input,
+            )
+            res.status(201).json({ batch })
         },
     )
 

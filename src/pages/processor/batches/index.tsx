@@ -29,9 +29,12 @@ import {
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import {
+  useHerbBatches,
+  useHerbBatchMutations,
+} from '../../../hooks/useHerbBatches'
 import BatchQueryError from '../../../components/herb/BatchQueryError'
-import { addBatchEvent, setStage as setBatchStage } from '../../../services/herbStorage'
+import { authMode } from '../../../config/api'
 import { addAdminSystemMessage } from '../../../mock/message/inbox'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import { STAGE_LABEL, type HerbBatch, type Stage } from '../../../types/herb'
@@ -65,29 +68,26 @@ function readAsDataUrl(file: File): Promise<string> {
   })
 }
 
-function nowDisplay(): string {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 export default function ProcessorBatchesPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
   const { data, loading, error, reload } = useHerbBatches()
 
+  const {
+    receiveProcessing,
+    completeProcessing,
+    saveQualityReport,
+  } = useHerbBatchMutations()
+
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<ProcessorStage | 'all'>('all')
-  const [receivingId, setReceivingId] = useState<string | null>(null)
-  const [completingId, setCompletingId] = useState<string | null>(null)
   const [completingBatch, setCompletingBatch] = useState<HerbBatch | null>(null)
   const [processingNote, setProcessingNote] = useState('')
   const [qcBatch, setQcBatch] = useState<HerbBatch | null>(null)
   const [qcNote, setQcNote] = useState('')
   const [qcFiles, setQcFiles] = useState<LocalReportFile[]>([])
   const [qcFileList, setQcFileList] = useState<UploadFile[]>([])
-  const [qcSubmitting, setQcSubmitting] = useState(false)
 
   /** processor 端第一版：只展示已经进入加工链路相关阶段的批次 */
   const processable = useMemo(
@@ -119,19 +119,20 @@ export default function ProcessorBatchesPage() {
       return
     }
 
-    setReceivingId(row.id)
     try {
-      await setBatchStage(row.id, 'processing', {
-        operatorName: session?.displayName ?? session?.processorName ?? '加工商',
-        operatorRole: 'processor',
-        note: `${session?.processorName ?? '加工商'} 已接收该批次，进入加工中。`,
+      await receiveProcessing.mutateAsync({
+        batchId: row.id,
+        operator: {
+          displayName:
+            session?.displayName ??
+            session?.processorName ??
+            '加工商',
+          processorName: session?.processorName,
+        },
       })
       message.success('已接收加工，批次阶段已更新为「加工中」')
-      reload()
     } catch (e) {
       message.error(`接收失败：${(e as Error).message}`)
-    } finally {
-      setReceivingId(null)
     }
   }
 
@@ -170,26 +171,32 @@ export default function ProcessorBatchesPage() {
       processingNote.trim() ||
       `${session?.processorName ?? '加工商'} 已完成基础加工，批次进入仓储待复核。`
 
-    setCompletingId(completingBatch.id)
     try {
-      await setBatchStage(completingBatch.id, 'warehousing', {
-        operatorName: session?.displayName ?? session?.processorName ?? '加工商',
-        operatorRole: 'processor',
+      await completeProcessing.mutateAsync({
+        batchId: completingBatch.id,
         note,
+        operator: {
+          displayName:
+            session?.displayName ??
+            session?.processorName ??
+            '加工商',
+          processorName: session?.processorName,
+        },
       })
-      addAdminSystemMessage({
-        senderName: '加工入库通知',
-        preview: `${completingBatch.herbName} 批次 ${completingBatch.batchNo} 已由 ${
-          session?.processorName ?? '加工商'
-        } 完成加工并进入仓储，请管理员复核后续入库/出库安排。`,
-      })
-      message.success('加工记录已保存，已通知管理员复核入库')
+
+      if (authMode === 'demo') {
+        addAdminSystemMessage({
+          senderName: '加工入库通知',
+          preview: `${completingBatch.herbName} 批次 ${completingBatch.batchNo
+            } 已由 ${session?.processorName ?? '加工商'
+            } 完成加工并进入仓储，请管理员复核后续入库/出库安排。`,
+        })
+      }
+
+      message.success('加工记录已保存，批次已进入仓储')
       closeCompleteModal()
-      reload()
     } catch (e) {
       message.error(`完成加工失败：${(e as Error).message}`)
-    } finally {
-      setCompletingId(null)
     }
   }
 
@@ -246,31 +253,43 @@ export default function ProcessorBatchesPage() {
 
   const handleSaveQcReport = async () => {
     if (!qcBatch) return
-    if (qcFiles.length === 0) {
+
+    if (authMode === 'demo' && qcFiles.length === 0) {
       message.warning('请至少上传 1 个质检报告附件')
       return
     }
 
-    setQcSubmitting(true)
+    const note = qcNote.trim()
+    if (authMode === 'api' && !note) {
+      message.warning('真实数据模式下请填写质检摘要')
+      return
+    }
+
     try {
-      await addBatchEvent(qcBatch.id, {
-        type: 'qcReport',
-        title: '加工质检报告',
-        description:
-          qcNote.trim() ||
-          `${session?.processorName ?? '加工商'} 已上传加工质检报告，等待平台复核。`,
-        occurredAt: nowDisplay(),
-        operatorName: session?.displayName ?? session?.processorName ?? '加工商',
-        operatorRole: 'processor',
-        attachments: qcFiles,
+      await saveQualityReport.mutateAsync({
+        batchId: qcBatch.id,
+        input: {
+          note:
+            note ||
+            `${session?.processorName ?? '加工商'} 已上传加工质检报告，等待平台复核。`,
+          attachments:
+            authMode === 'demo'
+              ? qcFiles
+              : undefined,
+        },
+        operator: {
+          displayName:
+            session?.displayName ??
+            session?.processorName ??
+            '加工商',
+          processorName: session?.processorName,
+        },
       })
-      message.success('质检报告已保存到溯源档案')
+
+      message.success('质检记录已保存到溯源档案')
       closeQcModal()
-      reload()
     } catch (e) {
       message.error(`保存质检报告失败：${(e as Error).message}`)
-    } finally {
-      setQcSubmitting(false)
     }
   }
 
@@ -367,7 +386,10 @@ export default function ProcessorBatchesPage() {
               type="link"
               size="small"
               icon={<ToolOutlined />}
-              loading={receivingId === row.id}
+              loading={
+                receiveProcessing.isPending &&
+                receiveProcessing.variables?.batchId === row.id
+              }
               disabled={row.auditStatus !== 'approved'}
               onClick={() => confirmReceive(row)}
             >
@@ -379,7 +401,10 @@ export default function ProcessorBatchesPage() {
               type="link"
               size="small"
               icon={<ToolOutlined />}
-              loading={completingId === row.id}
+              loading={
+                completeProcessing.isPending &&
+                completeProcessing.variables?.batchId === row.id
+              }
               disabled={row.auditStatus !== 'approved'}
               onClick={() => openCompleteModal(row)}
             >
@@ -481,7 +506,7 @@ export default function ProcessorBatchesPage() {
         open={Boolean(completingBatch)}
         okText="确认入库"
         cancelText="取消"
-        confirmLoading={Boolean(completingId)}
+        confirmLoading={completeProcessing.isPending}
         onOk={handleCompleteProcessing}
         onCancel={closeCompleteModal}
       >
@@ -506,7 +531,7 @@ export default function ProcessorBatchesPage() {
         open={Boolean(qcBatch)}
         okText="保存报告"
         cancelText="取消"
-        confirmLoading={qcSubmitting}
+        confirmLoading={saveQualityReport.isPending}
         onOk={handleSaveQcReport}
         onCancel={closeQcModal}
       >
@@ -523,8 +548,14 @@ export default function ProcessorBatchesPage() {
             }}
             accept="application/pdf,image/*"
             multiple
+            disabled={authMode === 'api'}
           >
-            <Button icon={<UploadOutlined />}>选择 PDF / 图片报告</Button>
+            <Button
+              icon={<UploadOutlined />}
+              disabled={authMode === 'api'}
+            >
+              选择 PDF / 图片报告
+            </Button>
           </Upload>
           <TextArea
             rows={4}
@@ -535,7 +566,9 @@ export default function ProcessorBatchesPage() {
             onChange={(e) => setQcNote(e.target.value)}
           />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            当前为前端演示：附件以 data url 存入本地覆盖层，后续接入后端后会替换为 R2 或对象存储地址。
+            {authMode === 'demo'
+              ? '演示模式下附件以 data URL 存入本地覆盖层。'
+              : '真实数据模式当前先保存质检摘要，文件附件将在接入对象存储后开放。'}
           </Text>
         </Space>
       </Modal>

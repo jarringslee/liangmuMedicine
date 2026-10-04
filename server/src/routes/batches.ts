@@ -316,6 +316,32 @@ export function createBatchRouter(
         },
     )
 
+    router.post(
+        '/:identifier/shipping/dispatch',
+        requireRoles('admin'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const batch = await batchService.dispatch(
+                req.auth!,
+                identifier,
+            )
+            res.json({ batch })
+        },
+    )
+
+    router.post(
+        '/:identifier/receipt/confirm',
+        requireRoles('buyer'),
+        async (req, res) => {
+            const identifier = identifierSchema.parse(req.params.identifier)
+            const batch = await batchService.confirmReceipt(
+                req.auth!,
+                identifier,
+            )
+            res.json({ batch })
+        },
+    )
+
     // 返回配置完成的路由实例，供主程序挂载
     return router
 }

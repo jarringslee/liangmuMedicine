@@ -26,6 +26,7 @@ import {
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SendOutlined,
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -48,6 +49,8 @@ import './herbs.less'
 import type { AuditDecision } from '../../../services/herbDataSource'
 import { authMode } from '../../../config/api'
 
+import { useAuth } from '../../../hooks/useAuth'
+
 const { Header, Content } = Layout
 const { Text, Title } = Typography
 
@@ -67,9 +70,13 @@ const AUDIT_OPTIONS: { value: AuditStatus | 'all'; label: string }[] = [
 export default function AdminHerbsPage() {
   const { token } = theme.useToken()
   const navigate = useNavigate()
+  const { session } = useAuth()
   const { data, loading, error, reload } = useHerbBatches()
 
-  const { setAudit: auditMutation } = useHerbBatchMutations()
+  const {
+    setAudit: auditMutation,
+    dispatch,
+  } = useHerbBatchMutations()
 
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<Stage | 'all'>('all')
@@ -119,6 +126,28 @@ export default function AdminHerbsPage() {
       okText: '确认',
       cancelText: '取消',
       onOk: () => handleAudit(row.id, next),
+    })
+  }
+
+  const handleDispatch = async (row: HerbBatch) => {
+    try {
+      await dispatch.mutateAsync({
+        batchId: row.id,
+        operatorName: session?.displayName ?? '管理员',
+      })
+      message.success('已确认出库，批次进入运输中')
+    } catch (e) {
+      message.error(`出库失败：${(e as Error).message}`)
+    }
+  }
+
+  const confirmDispatch = (row: HerbBatch) => {
+    Modal.confirm({
+      title: '确认该批次出库？',
+      content: `批次：${row.batchNo} · ${row.herbName}`,
+      okText: '确认出库',
+      cancelText: '取消',
+      onOk: () => handleDispatch(row),
     })
   }
 
@@ -197,7 +226,7 @@ export default function AdminHerbsPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 200,
+      width: 280,
       fixed: 'right',
       render: (_, row) => (
         <Space size={4}>
@@ -209,6 +238,21 @@ export default function AdminHerbsPage() {
           >
             查看
           </Button>
+          {row.stage === 'warehousing' ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<SendOutlined />}
+              loading={
+                dispatch.isPending &&
+                dispatch.variables?.batchId === row.id
+              }
+              disabled={row.auditStatus !== 'approved'}
+              onClick={() => confirmDispatch(row)}
+            >
+              确认出库
+            </Button>
+          ) : null}
           <Dropdown
             menu={{
               items: [
@@ -320,7 +364,7 @@ export default function AdminHerbsPage() {
             loading={loading}
             columns={columns}
             dataSource={filtered}
-            scroll={{ x: 1200 }}
+            scroll={{ x: 1280 }}
             pagination={{ pageSize: 8, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
             locale={{
               emptyText: <Empty description="暂无药材批次" image={Empty.PRESENTED_IMAGE_SIMPLE} />,

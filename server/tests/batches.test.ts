@@ -65,7 +65,7 @@ function detailFixture(input: {
   id: string
   herbName: string
   auditStatus: 'pending' | 'approved' | 'rejected'
-  stage: 'planting' | 'harvested' | 'processing' | 'warehousing'
+  stage: 'planting' | 'harvested' | 'processing' | 'warehousing' | 'shipped' | 'sold'
   growerId: string
   processorId: string | null
 }): BatchDetailRecord {
@@ -464,6 +464,66 @@ const batchRepository: BatchRepository = {
     })
     return batch
   },
+  dispatch: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (
+      !batch ||
+      batch.version !== input.expectedVersion ||
+      batch.stage !== 'warehousing' ||
+      batch.auditStatus !== 'approved'
+    ) return null
+
+    const changedAt = new Date('2026-09-28T06:00:00.000Z')
+    batch.stage = 'shipped'
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push({
+      id: `${batch.id}-dispatch-${batch.version}`,
+      type: 'stageChange',
+      title: '阶段变更：仓储 → 已出库',
+      description: '管理员已确认出库，批次进入运输环节。',
+      payload: null,
+      occurredAt: changedAt,
+      operatorName: input.operatorName,
+      operatorRole: 'admin',
+      visibleRoles: [],
+      fromStage: 'warehousing',
+      toStage: 'shipped',
+      createdAt: changedAt,
+      attachments: [],
+    })
+    return batch
+  },
+  confirmReceipt: async (input) => {
+    const batch = batches.find((item) => item.id === input.batchId)
+    if (
+      !batch ||
+      batch.version !== input.expectedVersion ||
+      batch.stage !== 'shipped' ||
+      batch.auditStatus !== 'approved'
+    ) return null
+
+    const changedAt = new Date('2026-09-28T07:00:00.000Z')
+    batch.stage = 'sold'
+    batch.version += 1
+    batch.updatedAt = changedAt
+    batch.events.push({
+      id: `${batch.id}-receipt-${batch.version}`,
+      type: 'stageChange',
+      title: '阶段变更：已出库 → 已售',
+      description: '采购商已确认收货，批次完成本次流转。',
+      payload: null,
+      occurredAt: changedAt,
+      operatorName: input.operatorName,
+      operatorRole: 'buyer',
+      visibleRoles: [],
+      fromStage: 'shipped',
+      toStage: 'sold',
+      createdAt: changedAt,
+      attachments: [],
+    })
+    return batch
+  },
 }
 
 const batchService = createBatchService(batchRepository)
@@ -827,4 +887,68 @@ test('加工商可以保存质检摘要，但不能操作其他组织批次', as
     { summary: '不应写入' },
   )
   assert.equal(growerForbidden.status, 403)
+})
+
+test('只有管理员可以将仓储批次确认出库', async () => {
+  const buyerForbidden = await send(
+    '/api/batches/two/shipping/dispatch',
+    'buyer',
+    'POST',
+    {},
+  )
+  assert.equal(buyerForbidden.status, 403)
+
+  const response = await send(
+    '/api/batches/two/shipping/dispatch',
+    'admin',
+    'POST',
+    {},
+  )
+  assert.equal(response.status, 200)
+  const batch = (await response.json()).batch
+  assert.equal(batch.stage, 'shipped')
+  assert.equal(batch.events.at(-1).operatorRole, 'admin')
+  assert.equal(batch.events.at(-1).fromStage, 'warehousing')
+  assert.equal(batch.events.at(-1).toStage, 'shipped')
+
+  const repeated = await send(
+    '/api/batches/two/shipping/dispatch',
+    'admin',
+    'POST',
+    {},
+  )
+  assert.equal(repeated.status, 409)
+  assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
+})
+
+test('只有采购商可以确认已出库批次收货', async () => {
+  const adminForbidden = await send(
+    '/api/batches/two/receipt/confirm',
+    'admin',
+    'POST',
+    {},
+  )
+  assert.equal(adminForbidden.status, 403)
+
+  const response = await send(
+    '/api/batches/two/receipt/confirm',
+    'buyer',
+    'POST',
+    {},
+  )
+  assert.equal(response.status, 200)
+  const batch = (await response.json()).batch
+  assert.equal(batch.stage, 'sold')
+  assert.equal(batch.events.at(-1).operatorRole, 'buyer')
+  assert.equal(batch.events.at(-1).fromStage, 'shipped')
+  assert.equal(batch.events.at(-1).toStage, 'sold')
+
+  const repeated = await send(
+    '/api/batches/two/receipt/confirm',
+    'buyer',
+    'POST',
+    {},
+  )
+  assert.equal(repeated.status, 409)
+  assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
 })

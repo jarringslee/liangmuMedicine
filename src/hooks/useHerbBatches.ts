@@ -7,10 +7,10 @@
  * 2. mutation 成功后统一 invalidate 批次缓存；demo 模式的其他本地写入
  *    仍可通过 `herb-changed` 事件触发缓存失效。
  * 3. 对外暴露三个常用入口：
- *    - `useHerbBatches()`  —— 列表（admin / buyer / grower 都在用）
+ *    - `useHerbBatches()` —— 列表（admin / buyer / grower 都在用）
  *    - `useHerbBatchById(id)` —— 详情（按需启用，避免列表页面也拖详情）
  *    - `useHerbBatchByTraceCode(code)` —— 扫码、直接链接共用的详情
- * 4. `useHerbBatchMutations()` 暴露 6 个 mutation，调用方按需取用。
+ * 4. `useHerbBatchMutations()` 暴露 11 个 mutation，调用方按需取用。
  */
 import { useEffect } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -36,6 +36,8 @@ import {
   listHerbBatches,
   receiveProcessingBatch,
   saveProcessingQualityReport,
+  confirmHerbReceipt,
+  dispatchHerbBatch,
   type AuditHerbBatchInput,
   type ProcessingQualityReportInput,
   type ProcessorOperator,
@@ -221,8 +223,28 @@ export function useHerbBatchMutations() {
     ),
     onSuccess: invalidate,
   })
+  // 出库、收货的请求状态和成功后的缓存刷新仍由 TanStack Query 统一管理。
+  const dispatch = useMutation({
+    mutationFn: ({
+      batchId,
+      operatorName,
+    }: {
+      batchId: string
+      operatorName: string
+    }) => dispatchHerbBatch(batchId, operatorName),
+    onSuccess: invalidate,
+  })
 
-
+  const confirmReceipt = useMutation({
+    mutationFn: ({
+      batchId,
+      operatorName,
+    }: {
+      batchId: string
+      operatorName: string
+    }) => confirmHerbReceipt(batchId, operatorName),
+    onSuccess: invalidate,
+  })
   return {
     create,
     update,
@@ -233,6 +255,8 @@ export function useHerbBatchMutations() {
     receiveProcessing,
     completeProcessing,
     saveQualityReport,
+    dispatch,
+    confirmReceipt,
   }
 }
 

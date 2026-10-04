@@ -247,6 +247,13 @@ type ProcessingQualityReportRepositoryInput = ProcessorRepositoryInput & {
     summary: string
 }
 
+type BatchTransitionRepositoryInput = {
+    batchId: string
+    expectedVersion: number
+    operatorId: string
+    operatorName: string
+}
+
 // 导出接口：定义批次数据仓库的方法契约
 export interface BatchRepository {
     count(where: Prisma.HerbBatchWhereInput): Promise<number>
@@ -262,6 +269,8 @@ export interface BatchRepository {
     receiveProcessing(input: ProcessorRepositoryInput): Promise<BatchDetailRecord | null>
     completeProcessing(input: CompleteProcessingRepositoryInput): Promise<BatchDetailRecord | null>
     saveProcessingQualityReport(input: ProcessingQualityReportRepositoryInput): Promise<BatchDetailRecord | null>
+    dispatch(input: BatchTransitionRepositoryInput): Promise<BatchDetailRecord | null>
+    confirmReceipt(input: BatchTransitionRepositoryInput): Promise<BatchDetailRecord | null>
 }
 
 // 创建实例，实现上面 BatchRepository 接口
@@ -561,6 +570,82 @@ const repository: BatchRepository = {
                 operatorName: input.operatorName,
                 operatorRole: 'processor',
                 visibleRoles: [],
+            },
+        })
+
+        return transaction.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+    }),
+
+    dispatch: (input) => prisma.$transaction(async (transaction) => {
+        const changedAt = new Date()
+        const dispatched = await transaction.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: 'warehousing',
+                auditStatus: 'approved',
+            },
+            data: {
+                stage: 'shipped',
+                version: { increment: 1 },
+            },
+        })
+        if (dispatched.count !== 1) return null
+
+        await transaction.batchEvent.create({
+            data: {
+                batchId: input.batchId,
+                type: 'stageChange',
+                title: '阶段变更：仓储 → 已出库',
+                description: '管理员已确认出库，批次进入运输环节。',
+                occurredAt: changedAt,
+                operatorId: input.operatorId,
+                operatorName: input.operatorName,
+                operatorRole: 'admin',
+                visibleRoles: [],
+                fromStage: 'warehousing',
+                toStage: 'shipped',
+            },
+        })
+
+        return transaction.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+    }),
+
+    confirmReceipt: (input) => prisma.$transaction(async (transaction) => {
+        const changedAt = new Date()
+        const confirmed = await transaction.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: 'shipped',
+                auditStatus: 'approved',
+            },
+            data: {
+                stage: 'sold',
+                version: { increment: 1 },
+            },
+        })
+        if (confirmed.count !== 1) return null
+
+        await transaction.batchEvent.create({
+            data: {
+                batchId: input.batchId,
+                type: 'stageChange',
+                title: '阶段变更：已出库 → 已售',
+                description: '采购商已确认收货，批次完成本次流转。',
+                occurredAt: changedAt,
+                operatorId: input.operatorId,
+                operatorName: input.operatorName,
+                operatorRole: 'buyer',
+                visibleRoles: [],
+                fromStage: 'shipped',
+                toStage: 'sold',
             },
         })
 
@@ -1085,6 +1170,78 @@ export function createBatchService(
                 operatorId: user.id,
                 operatorName: user.displayName,
                 summary: input.summary,
+            })
+            if (!batch) {
+                throw new HttpError(409, 'BATCH_STATE_CHANGED', '批次状态已变更，请刷新后重试')
+            }
+            return filterDetailForRole(batch, user)
+        },
+
+        async dispatch(
+            user: AuthUser,
+            identifier: string,
+        ) {
+            if (user.role !== 'admin') {
+                throw new HttpError(403, 'FORBIDDEN', '仅管理员可以确认批次出库')
+            }
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            if (current.auditStatus !== 'approved') {
+                throw new HttpError(409, 'BATCH_NOT_APPROVED', '仅审核通过的批次可以出库')
+            }
+            if (current.stage !== 'warehousing') {
+                throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅仓储阶段批次可以出库')
+            }
+
+            const batch = await batches.dispatch({
+                batchId: current.id,
+                expectedVersion: current.version,
+                operatorId: user.id,
+                operatorName: user.displayName,
+            })
+            if (!batch) {
+                throw new HttpError(409, 'BATCH_STATE_CHANGED', '批次状态已变更，请刷新后重试')
+            }
+            return filterDetailForRole(batch, user)
+        },
+
+        async confirmReceipt(
+            user: AuthUser,
+            identifier: string,
+        ) {
+            if (user.role !== 'buyer') {
+                throw new HttpError(403, 'FORBIDDEN', '仅采购商可以确认收货')
+            }
+            const current = await batches.findOne(
+                detailWhere(user, identifier),
+            )
+            if (!current) {
+                throw new HttpError(
+                    404,
+                    'BATCH_NOT_FOUND',
+                    '药材批次不存在或无权查看',
+                )
+            }
+            if (current.auditStatus !== 'approved') {
+                throw new HttpError(409, 'BATCH_NOT_APPROVED', '仅审核通过的批次可以确认收货')
+            }
+            if (current.stage !== 'shipped') {
+                throw new HttpError(409, 'INVALID_BATCH_STAGE', '仅已出库批次可以确认收货')
+            }
+
+            const batch = await batches.confirmReceipt({
+                batchId: current.id,
+                expectedVersion: current.version,
+                operatorId: user.id,
+                operatorName: user.displayName,
             })
             if (!batch) {
                 throw new HttpError(409, 'BATCH_STATE_CHANGED', '批次状态已变更，请刷新后重试')

@@ -17,6 +17,7 @@ import {
   Typography,
   message,
   theme,
+  Modal,
 } from 'antd'
 import {
   EnvironmentOutlined,
@@ -27,10 +28,14 @@ import {
   ShopOutlined,
   TagsOutlined,
   UserOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
-import { useHerbBatches } from '../../../hooks/useHerbBatches'
+import {
+  useHerbBatchMutations,
+  useHerbBatches,
+} from '../../../hooks/useHerbBatches'
 import BatchQueryError from '../../../components/herb/BatchQueryError'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import QrScanDrawer from '../../../components/herb/QrScanDrawer'
@@ -72,6 +77,8 @@ export default function BuyerHerbsPage() {
   const { session, logout } = useAuth()
   const { data, loading, error, reload } = useHerbBatches()
 
+  const { confirmReceipt: receiptMutation } = useHerbBatchMutations()
+
   const [scanOpen, setScanOpen] = useState(false)
   const [quickViewBatch, setQuickViewBatch] = useState<HerbBatch | null>(null)
   const [keyword, setKeyword] = useState('')
@@ -101,6 +108,7 @@ export default function BuyerHerbsPage() {
   const handleScanResult = async (code: string) => {
     setScanOpen(false)
     try {
+      // 扫码查询和列表点击使用同一套数据源
       const found = await getHerbBatchByTraceCode(code)
       if (!found) {
         message.error(`未找到该溯源码：${code}`)
@@ -118,6 +126,28 @@ export default function BuyerHerbsPage() {
   const handleViewFull = (b: HerbBatch) => {
     setQuickViewBatch(null)
     navigate(`/trace/${b.traceCode}`, { state: { fromInternal: true } })
+  }
+
+  const handleReceipt = async (batch: HerbBatch) => {
+    try {
+      await receiptMutation.mutateAsync({
+        batchId: batch.id,
+        operatorName: session?.displayName ?? '采购商',
+      })
+      message.success('已确认收货，批次流转完成')
+    } catch (e) {
+      message.error(`确认收货失败：${(e as Error).message}`)
+    }
+  }
+
+  const confirmReceipt = (batch: HerbBatch) => {
+    Modal.confirm({
+      title: '确认收到该药材批次？',
+      content: `批次：${batch.batchNo} · ${batch.herbName}`,
+      okText: '确认收货',
+      cancelText: '取消',
+      onOk: () => handleReceipt(batch),
+    })
   }
 
   const handleLogout = () => {
@@ -310,6 +340,24 @@ export default function BuyerHerbsPage() {
                         查看详情
                       </Button>
                     </Link>
+                    {b.stage === 'shipped' ? (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<CheckCircleOutlined />}
+                        loading={
+                          receiptMutation.isPending &&
+                          receiptMutation.variables?.batchId === b.id
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          confirmReceipt(b)
+                        }}
+                      >
+                        确认收货
+                      </Button>
+                    ) : null}
+
                   </div>
                 </Card>
               </Col>

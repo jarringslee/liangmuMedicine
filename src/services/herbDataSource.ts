@@ -727,3 +727,55 @@ export async function saveProcessingQualityReport(
 
     return toDetailedHerbBatch(response.batch)
 }
+
+/**
+ * 管理员确认出库。
+ * 页面不直接判断数据源，demo/API 的区别继续收口在数据源层。
+ */
+export async function dispatchHerbBatch(
+    batchId: string,
+    operatorName: string,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        return setLocalStage(batchId, 'shipped', {
+            operatorName,
+            operatorRole: 'admin',
+            note: '管理员已确认出库，批次进入运输中。',
+        })
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/shipping/dispatch`,
+        {
+            method: 'POST',
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}
+
+/**
+ * 采购商确认收货。
+ * API 模式的操作人由服务端登录身份生成，前端不传可信身份字段。
+ */
+export async function confirmHerbReceipt(
+    batchId: string,
+    operatorName: string,
+): Promise<HerbBatch> {
+    if (authMode === 'demo') {
+        return setLocalStage(batchId, 'sold', {
+            operatorName,
+            operatorRole: 'buyer',
+            note: '采购商已确认收货，批次完成本次流转。',
+        })
+    }
+
+    const response = await apiRequest<ApiBatchDetailResponse>(
+        `/batches/${encodeURIComponent(batchId)}/receipt/confirm`,
+        {
+            method: 'POST',
+        },
+    )
+
+    return toDetailedHerbBatch(response.batch)
+}

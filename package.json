@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --test tests/auth.test.mjs",
+    "test": "node --test tests/auth.test.mjs tests/riskAnalysisDemo.test.mjs tests/riskAnalysisStream.test.mjs tests/herbQuestion.test.mjs tests/notifications.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,6 +22,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",
+    "socket.io-client": "4.8.4",
     "tslib": "^2.8.1"
   },
   "devDependencies": {

@@ -535,6 +535,7 @@ export default function ProcessorBatchesPage() {
         onOk={handleSaveQcReport}
         onCancel={closeQcModal}
       >
+
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Text type="secondary">
             {qcBatch ? `批次：${qcBatch.batchNo} · ${qcBatch.herbName}` : null}

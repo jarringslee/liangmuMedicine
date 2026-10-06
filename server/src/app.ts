@@ -15,6 +15,12 @@ import { createAuthService, type AuthService } from './services/auth.js'
 import { errorHandler, HttpError } from './middleware/error.js'
 // 批次模块路由工厂
 import { createBatchRouter } from './routes/batches.js'
+import { createRiskAnalysisRouter } from './routes/riskAnalysis.js'
+import { createRiskAnalysisService, type RiskAnalysisService } from './services/riskAnalysis.js'
+import { createHerbQuestionRouter } from './routes/herbQuestion.js'
+import { createHerbQuestionService, type HerbQuestionService } from './services/herbQuestion.js'
+import { createNotificationRouter } from './routes/notifications.js'
+import { createNotificationService, type NotificationService } from './services/notifications.js'
 // 批次业务服务工厂与类型定义
 import {
   createBatchService,
@@ -30,6 +36,9 @@ import {
 export function createApp(
   authService: AuthService = createAuthService(),
   batchService: BatchService = createBatchService(),
+  riskAnalysisService: RiskAnalysisService = createRiskAnalysisService(batchService),
+  herbQuestionService: HerbQuestionService = createHerbQuestionService(batchService),
+  notificationService: NotificationService = createNotificationService(),
 ) {
   // 初始化express app实例
   const app = express()
@@ -49,6 +58,9 @@ export function createApp(
   app.use('/api', healthRouter)
   // 挂载鉴权相关接口 /api/auth，注入认证服务
   app.use('/api/auth', createAuthRouter(authService))
+  app.use('/api/notifications', createNotificationRouter(authService, notificationService))
+  app.use('/api/batches', createRiskAnalysisRouter(authService, riskAnalysisService))
+  app.use('/api/batches', createHerbQuestionRouter(authService, herbQuestionService))
   // 挂载药材批次接口 /api/batches，注入鉴权服务和批次业务服务
   app.use(
     '/api/batches',

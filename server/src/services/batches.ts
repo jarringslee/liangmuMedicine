@@ -16,6 +16,7 @@ import type { // 从prisma客户端引入TS类型
 import { prisma } from '../lib/prisma.js'
 import { HttpError } from '../middleware/error.js'
 import type { AuthUser } from './auth.js'
+import { notificationChanges } from './notificationChanges.js'
 
 const organizationSelect = {
     id: true,
@@ -273,6 +274,54 @@ export interface BatchRepository {
     confirmReceipt(input: BatchTransitionRepositoryInput): Promise<BatchDetailRecord | null>
 }
 
+type SubmissionResult = { batch: BatchDetailRecord; recipientIds: string[] }
+type SubmissionTransaction = (work: (tx: Prisma.TransactionClient) => Promise<SubmissionResult>) => Promise<SubmissionResult>
+
+/** 建档、首条事件和管理员通知共同提交；推送提示必须在事务成功之后。 */
+export async function createSubmittedBatch(
+    input: BatchCreateRepositoryInput,
+    transaction: SubmissionTransaction = (work) => prisma.$transaction(work),
+    publish: (ids: string[]) => void = (ids) => notificationChanges.publish(ids),
+): Promise<BatchDetailRecord> {
+    const { batch, recipientIds } = await transaction(async (tx) => {
+        const batch = await tx.herbBatch.create({
+            data: {
+                batchNo: input.batchNo, traceCode: input.traceCode, herbName: input.herbName,
+                category: input.category, plantingStartDate: input.plantingStartDateValue,
+                origin: input.origin, environment: input.environment, description: input.description,
+                requiresProcessing: true, stage: 'planting', auditStatus: 'pending', riskLevel: 'normal',
+                growerOrganization: { connect: { id: input.growerOrganizationId } },
+                createdBy: { connect: { id: input.creatorId } },
+                events: { create: {
+                    type: 'create', title: '批次建档',
+                    description: `由种植商 ${input.creatorName} 创建批次，等待平台审核。`,
+                    occurredAt: new Date(), operator: { connect: { id: input.creatorId } },
+                    operatorName: input.creatorName, operatorRole: 'grower', visibleRoles: [],
+                } },
+            },
+            select: batchDetailSelect,
+        })
+        const recipients = await tx.user.findMany({
+            where: { role: 'admin', status: 'active', OR: [
+                { organizationId: null },
+                { organization: { is: { type: 'platform', enabled: true } } },
+            ] },
+            select: { id: true },
+        })
+        const recipientIds = recipients.map(({ id }) => id)
+        if (recipientIds.length) {
+            await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({
+                recipientId, batchId: batch.id, type: 'batchSubmitted' as const,
+                title: '新批次待审核',
+                content: `${input.creatorName} 提交了${input.herbName}批次 ${batch.batchNo}，请查看档案并审核。`,
+            })) })
+        }
+        return { batch, recipientIds }
+    })
+    publish(recipientIds)
+    return batch
+}
+
 // 创建实例，实现上面 BatchRepository 接口
 const repository: BatchRepository = {
     count: (where) => prisma.herbBatch.count({ where }),
@@ -296,45 +345,7 @@ const repository: BatchRepository = {
             select: batchDetailSelect, // 使用详情完整字段配置
         }),
 
-    // Prisma nested write：批次和首条建档事件在同一原子操作中写入。
-    create: (input) =>
-        prisma.herbBatch.create({
-            data: {
-                batchNo: input.batchNo,
-                traceCode: input.traceCode,
-                herbName: input.herbName,
-                category: input.category,
-                plantingStartDate: input.plantingStartDateValue,
-                origin: input.origin,
-                environment: input.environment,
-                description: input.description,
-                requiresProcessing: true,
-                stage: 'planting',
-                auditStatus: 'pending',
-                riskLevel: 'normal',
-                growerOrganization: {
-                    connect: { id: input.growerOrganizationId },
-                },
-                createdBy: {
-                    connect: { id: input.creatorId },
-                },
-                events: {
-                    create: {
-                        type: 'create',
-                        title: '批次建档',
-                        description: `由种植商 ${input.creatorName} 创建批次，等待平台审核。`,
-                        occurredAt: new Date(),
-                        operator: {
-                            connect: { id: input.creatorId },
-                        },
-                        operatorName: input.creatorName,
-                        operatorRole: 'grower',
-                        visibleRoles: [],
-                    },
-                },
-            },
-            select: batchDetailSelect,
-        }),
+    create: createSubmittedBatch,
 
     // 状态、审核记录和审核事件使用 nested write 原子更新，避免只写成功一部分。
     audit: (input) =>

@@ -17,7 +17,11 @@
 - 管理员、种植商、加工商和采购商的批次行级读取范围及详情字段过滤
 - 未分配批次共享待认领、认领后组织隔离与版本并发保护
 - 管理员确认出库、采购商确认收货，并原子记录阶段事件
-- 不修改真实数据库的 34 项鉴权与批次接口自动化测试
+- DeepSeek 风险分析与只读工具调用、人工复核审计、过期建议保护
+- 风险分析 SSE 阶段事件与客户端断线取消，保留非流式接口
+- 单轮 RAG 资料问答接口与 BM25 检索（多入口页面、本地真实问答 HTTP 链路与 Mock 模型浏览器交互已验收）
+- 管理员本人通知分页/筛选/未读计数、幂等已读接口与 JWT Socket.IO 通知提示；前端消息中心/铃铛本地浏览器验收完成
+- 不修改真实数据库、不消耗模型费用的 70 项鉴权/批次/风险分析/资料问答/通知自动化测试
 
 ## 本地准备
 
@@ -198,10 +202,69 @@ MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删�
 
 当前数据模型没有订单、合同、物流单、采购商组织归属或指定收货人关系。因此收货接口的 MVP 权限只是“已登录且角色为采购商”，任一采购商都能确认任一审核通过的已出库批次；这只能演示阶段闭环，不能视为生产级订单所有权校验。
 
+## AI 风险审核接口
+
+前端审核抽屉已接入，真实 DeepSeek + PostgreSQL + HTTP 烟测通过（建议保存、人工复核、审计关联、权限过滤和过期保护）。在 `server/.env` 设置 `DEEPSEEK_API_KEY` 后重启后端，`DEEPSEEK_MODEL` 默认 `deepseek-flash`，模型名称可以按账户支持情况调整。Key 只保存在服务端；模板中的 Key 必须保持为空。本地浏览器已使用 Mock 模型 + 真实 PostgreSQL 验证停止、失败、手动重试与人工审核；该轮不消耗模型费用，临时数据已清理。
+
+- `GET /api/batches/:identifier/risk-analysis`：查询最新建议，没有记录时返回 `{ analysis: null }`；批次版本变化或已审核时标记 `stale`
+- `POST /api/batches/:identifier/risk-analysis`：管理员发起分析，返回 201 `{ analysis }`；仅允许待审核批次，请求体为空
+- `POST /api/batches/:identifier/risk-analysis/stream`：同样要求管理员和待审核状态，请求体为空；成功响应为 `text/event-stream`，与非流式分析共用每用户限流
+- `POST /api/batches/:identifier/risk-analysis/:analysisId/review`：管理员提交 `{ decision, riskLevel, reason }`，事务内更新审核状态并关联建议记录
+
+Agent 使用 `get_batch_snapshot`、`inspect_trace_records` 两个只读工具。工具参数不接受其他批次 ID；最多三轮取数、六次工具执行和一次最终 JSON 输出。服务端使用 Zod 校验结果并检查引用 ID 来自本轮资料；资料缺失或已有风险不能被模型降低为“正常”。引用 ID 有效不等于模型结论绝对正确，人工仍需核对依据。没有药典或外部医学规则接入。
+
+建议存放在 `BatchEvent.payload`（`kind=auditRiskAnalysis`），只对管理员可见；人工结论存放在 `BatchAudit`（`source=aiAssisted`），保存模型名与分析快照。无需新增 migration。分析不会改动 `auditStatus/riskLevel`，只记录建议并递增版本；人工复核通过版本条件更新拒绝旧建议和重复提交。
+
+分析整体超时为 55 秒，每用户每分钟最多 5 次，单进程内同批次不能同时分析。上游 401 转为本系统 502，避免前端把 AI Key 配置错误当作登录失效。主要错误码包括 `AI_NOT_CONFIGURED`（503）、`AI_TIMEOUT`（504）、`AI_UPSTREAM_ERROR/AI_INVALID_RESULT`（502）、`AI_ANALYSIS_STALE/AI_ANALYSIS_RUNNING`（409）、`AI_RATE_LIMITED`（429）。
+
+协议参考：[DeepSeek API](https://api-docs.deepseek.com/api/create-chat-completion)。模型仍以完整 JSON 返回；SSE 是服务端业务阶段事件，不是模型逐 token 输出或思维链。
+
+### SSE 阶段与取消
+
+第十二刀已完成前端 Hook/抽屉 SSE 接入，真实前端数据源/HTTP/DeepSeek/PostgreSQL 烟测与本地 Mock 模型浏览器交互验收均已通过；不等同于生产反向代理验收。前端使用 TanStack Query 管理请求与已保存建议，React state 保存本次临时进度，AbortController 保存在 ref 中；停止/失败后查询最近保存结果，不自动重跑分析。
+
+- `progress`：`{ seq, stage, status, message, toolName?, at }`；stage 为 snapshot/model/tool/validate/save，status 为 running/completed，seq 在本次连接中连续递增
+- `result`：`{ analysis }`，只在完整校验和保存后发送；建议仍待管理员人工审核
+- `error`：`{ status, code, message }`，终态错误，不泄露上游或数据库内部诊断；开始 SSE 前的权限、入参、阶段等错误仍返回标准 HTTP JSON
+- 采用 UTF-8 和空行分帧，每 10 秒发送注释心跳；使用 `no-transform` 与 `X-Accel-Buffering: no`，部署时仍需实际确认反向代理不会缓冲
+- 不自动重连；单条 POST 代表一次付费分析。断流后先 GET 查询最新建议，必要时由用户手动重新分析
+- 响应连接关闭会通过 AbortSignal 中断后续模型调用，服务在模型/工具/保存边界检查取消；事务内提交前观察到取消则回滚。客户端取消记为 `AI_CANCELLED`，整体超时仍为 `AI_TIMEOUT`
+- 如果取消与数据库提交竞态，已经保存的建议不会自动删除；取消也不保证退还上游已产生的费用。MVP 没有后台任务队列、持久化运行进度或断点续传
+
+格式参考：[MDN SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)。
+
+## 单轮 RAG 资料问答（第十三刀）
+
+`POST /api/batches/:identifier/questions`：需要登录，请求体严格为 `{ "question": "2～500 字符的问题" }`，返回 `{ reply }`。四角色均使用现有 `BatchService.detail` 的组织/批次范围与事件裁剪，不接收前端批次快照、资料来源或角色。未知或无权访问均返回 404。
+
+- `reply` 含问题、纯文本答案、answered/insufficient 状态、服务端映射的 citations、批次 ID、模型名、知识版本和时间；不修改批次、保存会话或自动审核
+- 在 `src/knowledge/herbs.ts` 人工整理四味药材的 8 个非临床背景摘要，链接到香港浸会大学中药材图像数据库的公开记录；核对日期不是原文发布时间，不是完整药典或全量爬虫
+- 中文双字片段/英文词 + BM25 词法检索与小量扩展，最多 6 个相关片段；没有依据则直接资料不足。Embedding/pgvector 后置，无新 Key、依赖、表或 migration。评分参数参考 [Elasticsearch BM25](https://www.elastic.co/docs/reference/elasticsearch/index-settings/similarity)
+- 批次事实来自权限裁剪后的 detail，排除 AI 审核建议、操作人和完整 payload；当前只查看基础字段及最近 20 条可见事件的有限文字摘要
+- 模型仍使用既有 DeepSeek 原生 fetch 代理，一次 JSON 生成；Zod 校验结构，引用 ID 必须来自本轮召回且与正文对应，URL 由服务端映射，不由模型提供。检查引用存在不能证明内容完全受来源支持
+- 55 秒超时、断线取消、每用户 10 次/分钟、单进程内每用户一次运行保护；返回前重新检查批次访问/版本与账号角色/组织变化。不是多实例共享队列或持久化任务
+- 医疗关键词拒答和提示词隔离仅为 MVP 防护，不宣称完全解决医学安全、提示词注入或幻觉；不提供诊断、剂量、处方或治疗建议
+- 62 项后端自动化使用内存批次/Mock 模型；另完成真实 DeepSeek + PostgreSQL + HTTP 验收，使用现有已审核黄芪批次，不创建测试用户/批次，不执行 migration/seed。登记产地与通用背景回答各调用一次模型，医疗及无依据问题不调用模型，批次/事件/审核记录前后指纹一致
+- 前端 Hook/共用组件已接入详情与快速预览；本地浏览器采用 Mock 模型 + 真实 PostgreSQL 验收停止、失败、手动重试、来源展示与弹窗卸载，后端观察到两次取消。临时服务、脚本和标签已关闭/清理；不是生产环境或摄像头/微信真机扫码验收
+
+新增错误码：`AI_QUESTION_RUNNING`（409）、`AI_QUESTION_STALE`（409）；AI 代理和取消错误沿用既有约定。问答与风险分析使用独立限流计数，两者不自动重试。
+
+## 持久化通知与 Socket.IO（第十四刀）
+
+- `GET /api/notifications?page=1&pageSize=10&status=all` 返回 `{ items, total, unreadCount, page, pageSize }`；status 可为 all/unread/read，未读计数始终针对本人全部通知。用户 ID 来自登录身份，不接受 recipientId。未知查询字段返回 400
+- `PATCH /api/notifications/:id/read` 接受空对象，返回 `{ item }`；只标记本人消息，未知或其他收件人的 ID 都返回 404，非管理员返回 403。条件更新确保并发/重复点击不覆盖首次 readAt；通知内部 metadata/recipientId 不进入 DTO。通知路由响应设置 `Cache-Control: no-store`，避免私人数据被 HTTP 缓存保存
+- 建档、首条事件与有效管理员的 batchSubmitted 通知在同一事务中写入。仅 role=admin、active 且平台组织有效（或无组织）的账号收通知；事务完成后才发布提示，没有有效管理员时不创建空消息
+- Express 与 Socket.IO 共用 HTTP Server；客户端使用 `/socket.io`，handshake.auth 仅接受 `{ token }`，JWT 验证与数据库 currentUser 检查独立于前端路由。服务端决定用户房间，不开放任意 join 指令；Origin 限定 CLIENT_ORIGIN，无 Origin 的 CLI 也必须有合法 JWT
+- `notifications:changed` 只提醒前端缓存失效，不携带通知正文。JWT 到期主动断开；长连接每 30 秒检查账号、组织与角色变化，变化时发送 session:invalid 并断开（不是每帧实时检查）。每个 REST 请求仍独立认证
+- 服务为单实例内存广播，没有 Redis adapter、outbox、持久化事件重放或必达保证。提示失败不撤销已提交业务；前端必须在连接/重连时查询 PostgreSQL 补齐，消息表是唯一持久化来源。参考 [Socket.IO 交付保证](https://socket.io/docs/v4/delivery-guarantees/)
+- 8 项新增自动化覆盖收件人范围、参数与角色、幂等、提交后推送、真实 Socket 握手/Origin/房间、断线后 REST 补查、JWT 过期与账号停用；总计 70 项。数据库烟测生成一条随机标记批次和两名管理员的通知，验证推送与已读恢复后全部精确清理，没有执行 seed/migration
+- 前端数据源、Query Hook、App 全局订阅、消息中心与铃铛已接入。真实 PostgreSQL 的本地浏览器验收覆盖双账号建档即时通知、已读/计数/筛选、刷新持久化、链接与角色拦截；临时数据已精确清理，没有调用 AI 或改动 seed。本次浏览器未模拟网络断线，不将集成测试结论冒充浏览器结论
+- 当前只有建档生成新持久化通知。聊天室、其他阶段通知、生产代理/部署均未实现或未验证。pg 弃用提示仍为工程化待办，不影响本轮通过结果
+
 ## 下一阶段
 
-前端开发模式通过 Vite 将 `/api` 代理到本服务；生产构建默认使用独立的 demo 认证，不要求静态托管平台运行本服务。环境切换与请求层说明见根目录 README。
+前端开发模式通过 Vite 将 `/api` 和 `/socket.io`（启用实时连接代理）转发到本服务；生产构建默认使用独立的 demo 认证，不要求静态托管平台运行本服务。环境切换与请求层说明见根目录 README。
 
-1. AI 风险审核 Agent、人工复核和审计记录
-2. RAG 药材知识问答与基础评测
-3. 匿名脱敏溯源、真实附件存储、实时通知和前端页面测试
+1. 第十四刀本地验收完成；下一阶段实现最小一对一聊天的权限、持久化历史与实时收发
+2. 匿名脱敏溯源、真实附件存储、其他阶段通知和前端页面测试
+3. 后端部署时验证 SSE 代理缓冲、超时与断线取消

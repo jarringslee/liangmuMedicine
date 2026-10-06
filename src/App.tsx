@@ -22,6 +22,8 @@ import ProcessorBatchesPage from './pages/processor/batches'
 import TraceDetailPage from './pages/trace/Detail'
 import { useHerbQueryInvalidator } from './hooks/useHerbBatches'
 
+import { useNotificationRealtime } from './hooks/useNotifications'
+
 const appTheme = {
   token: {
     colorPrimary: '#2f6f4e',
@@ -45,9 +47,11 @@ export default function App() {
  * 监听 storage 派发的 `herb-changed` 事件，触发
  * queryClient.invalidateQueries(['herb-batches'])，
  * 所有订阅 useHerbBatches / useHerbBatchById 的页面自动重新拉取。
+ * 同时挂载通知实时订阅；只有这一个入口负责创建/清理通知连接。
  */
 function HerbSyncBridge() {
   useHerbQueryInvalidator()
+  useNotificationRealtime()
   return (
     <Routes>
       <Route

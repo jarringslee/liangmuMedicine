@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import { createServer } from 'vite'
+import { createElement } from 'react'
+import { renderToString } from 'react-dom/server'
 
 // Vite 负责转换 TS/import.meta.env，Node 内置测试器负责断言；无需安装第二套构建工具。
 let vite, auth, api, storage, queryClient
@@ -16,6 +18,8 @@ const credentials = { account: 'admin', password: 'password', role: 'admin' }
 
 async function setup(mode = 'development') {
   vite = await createServer({
+    // 不与其他测试文件或正在运行的开发服务器争用 Vite 缓存。
+    cacheDir: 'node_modules/.vite-tests/auth',
     mode, server: { middlewareMode: true, hmr: false, watch: null },
     define: {
       'import.meta.env.VITE_AUTH_MODE': JSON.stringify(mode === 'production' ? 'demo' : 'api'),
@@ -220,4 +224,177 @@ test('显式 demo 模式完全不请求后端，仍支持四角色演示', async
     assert.equal(storage.getAuthSession().role, role)
     auth.logout()
   }
+})
+
+test('风险分析统一数据源正确编码 ID、携带认证、透传取消信号并提交人工结论', async () => {
+  await loginAs()
+  const source = await vite.ssrLoadModule('/src/services/herbDataSource.ts')
+  const batchId = 'batch/with space'
+  const analysisId = 'analysis/with space'
+  const path = `/api/batches/${encodeURIComponent(batchId)}/risk-analysis`
+  const controller = new AbortController()
+  const requests = []
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options })
+    assert.equal(options.headers.Authorization, 'Bearer token-admin')
+    if (url.endsWith('/review')) return json({ batchId, decision: 'approved' })
+    return json({ analysis: options.method === 'POST' ? { id: analysisId } : null })
+  }
+  assert.equal(await source.getLatestRiskAnalysis(batchId, controller.signal), null)
+  assert.deepEqual(await source.analyzeBatchRisk(batchId), { id: analysisId })
+  const input = { decision: 'approved', riskLevel: 'low', reason: '人工核对' }
+  assert.deepEqual(await source.submitRiskReview(batchId, analysisId, input), { batchId, decision: 'approved' })
+  assert.deepEqual(requests.map(({ url, options }) => [url, options.method]), [
+    [path, 'GET'], [path, 'POST'], [`${path}/${encodeURIComponent(analysisId)}/review`, 'POST'],
+  ])
+  assert.equal(requests[1].options.body, undefined)
+  assert.deepEqual(JSON.parse(requests[2].options.body), input)
+  controller.abort()
+  assert.equal(requests[0].options.signal.aborted, true)
+})
+
+test('AI 分析独立使用 70 秒超时，不沿用普通请求的 15 秒且超时不退出登录', async (context) => {
+  await loginAs()
+  const source = await vite.ssrLoadModule('/src/services/herbDataSource.ts')
+  context.mock.timers.enable({ apis: ['setTimeout'] })
+  let signal
+  globalThis.fetch = (_url, options) => {
+    signal = options.signal
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)))
+  }
+  const pending = source.analyzeBatchRisk('batch-test')
+  context.mock.timers.tick(15_000)
+  assert.equal(signal.aborted, false)
+  context.mock.timers.tick(55_000)
+  await assert.rejects(pending, { code: 'TIMEOUT' })
+  assert.equal(auth.getAuthSnapshot().status, 'authenticated')
+  context.mock.timers.reset()
+})
+
+const riskAnalysis = (id = 'new-analysis') => ({
+  id, batchId: 'batch-test', basedOnVersion: 1, reviewVersion: 2,
+  modelName: 'mock-model', promptVersion: 'audit-risk-v1', createdAt: '2026-10-04T08:00:00Z',
+  mode: 'api', riskLevel: 'low', recommendation: 'manualReview', summary: '请人工核对资料。',
+  missingInformation: [], evidence: [{ sourceId: 'batch:identity', note: '已读取批次' }], toolCalls: [], stale: false,
+})
+const riskFrame = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+const riskResponse = (text) => new Response(text, { headers: { 'Content-Type': 'text/event-stream' } })
+async function createRiskHookHarness() {
+  const { QueryClientProvider, QueryObserver } = await vite.ssrLoadModule('@tanstack/react-query')
+  await loginAs()
+  const { useBatchRiskAnalysis } = await vite.ssrLoadModule('/src/hooks/useBatchRiskAnalysis.ts')
+  const { herbQueryKeys } = await vite.ssrLoadModule('/src/hooks/useHerbBatches.ts')
+  const queryKey = ['batch-risk-analysis', 'api', 'batch-test']
+  let hook
+  function Harness() {
+    hook = useBatchRiskAnalysis('batch-test')
+    return null
+  }
+  // SSR 只用于合法调用 React Hook，不声称覆盖浏览器 UI 交互。
+  renderToString(createElement(QueryClientProvider, { client: queryClient }, createElement(Harness)))
+  return { hook, queryKey, herbQueryKeys, QueryObserver }
+}
+
+test('风险分析 Hook 在写入新建议前取消旧读取，迟到响应不会覆盖新缓存', async () => {
+  const { hook, queryKey, herbQueryKeys } = await createRiskHookHarness()
+  let resolveOld
+  queryClient.setQueryData(herbQueryKeys.all, ['old-batch-list'])
+  const oldRequest = queryClient.fetchQuery({
+    queryKey, queryFn: () => new Promise((resolve) => { resolveOld = resolve }),
+  })
+  // 立即捕获取消，防止测试器将预期的取消视为未处理拒绝。
+  const oldOutcome = oldRequest.then(() => 'completed', () => 'cancelled')
+  const analysis = riskAnalysis()
+  globalThis.fetch = async (url) => {
+    assert.match(url, /risk-analysis\/stream$/)
+    return riskResponse(riskFrame('result', { analysis }))
+  }
+  await hook.startAnalyze()
+  assert.equal(await oldOutcome, 'cancelled')
+  assert.deepEqual(queryClient.getQueryData(queryKey), analysis)
+  assert.equal(queryClient.getQueryState(herbQueryKeys.all).isInvalidated, true)
+  resolveOld(null)
+  await Promise.resolve()
+  assert.deepEqual(queryClient.getQueryData(queryKey), analysis)
+})
+
+test('Hook 停止后重新读取已保存建议，不自动重跑，手动重试使用全新控制器', async () => {
+  const { hook, queryKey, herbQueryKeys, QueryObserver } = await createRiskHookHarness()
+  const saved = riskAnalysis('saved-before-disconnect')
+  const retry = riskAnalysis('manual-retry')
+  const signals = []
+  let reads = 0, cancelled = false
+  globalThis.fetch = async (url, request) => {
+    if (!url.endsWith('/stream')) { reads += 1; return json({ analysis: saved }) }
+    signals.push(request.signal)
+    if (signals.length > 1) return riskResponse(riskFrame('result', { analysis: retry }))
+    return new Response(new ReadableStream({ cancel() { cancelled = true } }), {
+      headers: { 'Content-Type': 'text/event-stream' },
+    })
+  }
+  queryClient.setQueryData(queryKey, null)
+  queryClient.setQueryData(herbQueryKeys.all, ['old-list'])
+  const observer = new QueryObserver(queryClient, {
+    queryKey, staleTime: Infinity,
+    queryFn: () => vite.ssrLoadModule('/src/services/herbDataSource.ts').then((source) => source.getLatestRiskAnalysis('batch-test')),
+  })
+  const unsubscribe = observer.subscribe(() => undefined)
+  try {
+    const rejected = assert.rejects(hook.startAnalyze(), { name: 'AbortError' })
+    assert.equal(await hook.startAnalyze(), undefined) // controller ref 阻止同步连点。
+    await new Promise((resolve) => setImmediate(resolve))
+    hook.stopAnalyze()
+    hook.stopAnalyze()
+    await rejected
+    assert.equal(cancelled, true)
+    assert.equal(signals.length, 1)
+    assert.equal(reads, 1)
+    assert.deepEqual(queryClient.getQueryData(queryKey), saved)
+    assert.equal(queryClient.getQueryState(herbQueryKeys.all).isInvalidated, true)
+    assert.deepEqual(await hook.startAnalyze(), retry)
+    assert.equal(signals.length, 2)
+    assert.notEqual(signals[0], signals[1])
+    assert.equal(signals[0].aborted, true)
+    assert.equal(signals[1].aborted, false)
+  } finally { unsubscribe() }
+})
+
+test('Hook 流中失败后读取旧建议并释放控制器，下一次手动分析可以成功', async () => {
+  const { hook, queryKey, QueryObserver } = await createRiskHookHarness()
+  const saved = riskAnalysis('previous-saved')
+  let analyses = 0, reads = 0
+  globalThis.fetch = async (url) => {
+    if (!url.endsWith('/stream')) { reads += 1; return json({ analysis: saved }) }
+    analyses += 1
+    return riskResponse(analyses === 1
+      ? riskFrame('error', { status: 502, code: 'AI_UPSTREAM_ERROR', message: '模拟模型不可用' })
+      : riskFrame('result', { analysis: riskAnalysis() }))
+  }
+  queryClient.setQueryData(queryKey, null)
+  const observer = new QueryObserver(queryClient, {
+    queryKey, staleTime: Infinity,
+    queryFn: () => vite.ssrLoadModule('/src/services/herbDataSource.ts').then((source) => source.getLatestRiskAnalysis('batch-test')),
+  })
+  const unsubscribe = observer.subscribe(() => undefined)
+  try {
+    await assert.rejects(hook.startAnalyze(), { code: 'AI_UPSTREAM_ERROR' })
+    assert.equal(analyses, 1)
+    assert.equal(reads, 1)
+    assert.deepEqual(queryClient.getQueryData(queryKey), saved)
+    await hook.startAnalyze()
+    assert.equal(analyses, 2)
+    assert.equal(queryClient.getQueryData(queryKey).id, 'new-analysis')
+  } finally { unsubscribe() }
+})
+
+test('Hook 成功回调的 await 期间切换身份，也不能写入旧分析缓存', async (context) => {
+  const { hook, queryKey } = await createRiskHookHarness()
+  globalThis.fetch = async () => riskResponse(riskFrame('result', { analysis: riskAnalysis() }))
+  context.mock.method(queryClient, 'cancelQueries', async () => {
+    storage.setAccessToken('token-B')
+    queryClient.clear()
+  })
+  await hook.startAnalyze()
+  assert.equal(queryClient.getQueryData(queryKey), undefined)
+  assert.equal(storage.getAccessToken(), 'token-B')
 })

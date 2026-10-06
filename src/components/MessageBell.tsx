@@ -1,69 +1,38 @@
-import { useEffect, useState } from 'react'
-import { Badge, Button, Divider, Popover, Tag, Typography } from 'antd'
+import { Badge, Button, Divider, Popover, Typography } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import type { InboxMessage } from '../mock/message/inbox'
-import {
-  getInboxSnapshot,
-  subscribeInboxChanged,
-} from '../mock/message/inbox'
+import { useNotifications } from '../hooks/useNotifications'
+import { formatNotificationTime } from '../utils/notification'
 import './MessageBell.less'
 
 const { Text } = Typography
 
-function SenderLine({ item }: { item: InboxMessage }) {
-  if (item.channel === 'chat') {
-    return (
-      <span className="message-bell-item__sender">
-        <Text strong ellipsis>
-          {item.senderName}
-        </Text>
-        {item.senderRole ? <Tag>{item.senderRole}</Tag> : null}
-      </span>
-    )
-  }
-  return (
-    <span className="message-bell-item__sender">
-      <Text strong>{item.senderName}</Text>
-    </span>
-  )
-}
-
 export function MessageBell() {
   const navigate = useNavigate()
-  const [snapshot, setSnapshot] = useState(() => getInboxSnapshot(5))
-
-  useEffect(() => {
-    const refresh = () => setSnapshot(getInboxSnapshot(5))
-    const unsubscribe = subscribeInboxChanged(refresh)
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
-    refresh()
-    return () => {
-      unsubscribe()
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [])
+  // 复用通知查询；实时连接只由 App 中的桥接 Hook 创建。
+  const { query } = useNotifications({ page: 1, pageSize: 5, status: 'all' })
 
   const content = (
     <div className="message-bell-popover">
       <div className="message-bell-popover__list">
-        {snapshot.recent.map((item, index) => (
+        {query.error && <Text type="danger">通知暂不可用，可进入消息中心重试</Text>}
+        {query.isPending && <Text type="secondary">加载通知中…</Text>}
+        {!query.isPending && !query.error && !query.data?.items.length && <Text type="secondary">暂无消息</Text>}
+        {query.data?.items.map((item, index) => (
           <div key={item.id}>
             {index > 0 ? <Divider style={{ margin: '8px 0' }} /> : null}
             <div
-              className={`message-bell-item ${!item.read ? 'message-bell-item--unread' : ''}`}
+              className={`message-bell-item ${!item.readAt ? 'message-bell-item--unread' : ''}`}
               role="presentation"
             >
               <div className="message-bell-item__row">
-                <SenderLine item={item} />
+                <span className="message-bell-item__sender"><Text strong>{item.title}</Text></span>
                 <Text type="secondary" className="message-bell-item__date">
-                  {item.dateLabel}
+                  {formatNotificationTime(item.createdAt)}
                 </Text>
               </div>
-              <p className="message-bell-item__preview" title={item.preview}>
-                {item.preview}
+              <p className="message-bell-item__preview" title={item.content}>
+                {item.content}
               </p>
             </div>
           </div>
@@ -85,7 +54,7 @@ export function MessageBell() {
       placement="bottomRight"
       mouseEnterDelay={0.15}
     >
-      <Badge count={snapshot.unread} overflowCount={99} size="small">
+      <Badge count={query.data?.unreadCount ?? 0} overflowCount={99} size="small">
         <Button
           type="text"
           icon={<BellOutlined />}

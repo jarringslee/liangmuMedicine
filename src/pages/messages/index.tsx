@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
+  Alert,
   Breadcrumb,
   Button,
   Card,
@@ -15,13 +16,10 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { ArrowLeftOutlined, BellOutlined, MedicineBoxOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
-import {
-  type InboxMessage,
-  type MessageChannel,
-  channelLabel,
-  getInboxSnapshot,
-  subscribeInboxChanged,
-} from '../../mock/message/inbox'
+import { authMode } from '../../config/api'
+import { useNotifications } from '../../hooks/useNotifications'
+import type { BusinessNotification, NotificationQuery } from '../../types/notification'
+import { formatNotificationTime, notificationTypeLabels } from '../../utils/notification'
 import '../dashboard/index.less'
 
 const { Header, Content } = Layout
@@ -29,80 +27,70 @@ const { Text, Title } = Typography
 
 const TAB_ITEMS = [
   { key: 'all', label: '全部' },
-  { key: 'system', label: '系统消息' },
-  { key: 'email', label: '邮件消息' },
-  { key: 'chat', label: '聊天消息' },
+  { key: 'unread', label: '未读' },
+  { key: 'read', label: '已读' },
 ] as const
-
-type TabKey = (typeof TAB_ITEMS)[number]['key']
 
 export default function MessagesPage() {
   const { token } = theme.useToken()
-  const [tab, setTab] = useState<TabKey>('all')
-  const [snapshot, setSnapshot] = useState(() => getInboxSnapshot(10))
-
-  const refreshMessages = () => setSnapshot(getInboxSnapshot(10))
-
-  useEffect(() => {
-    const unsubscribe = subscribeInboxChanged(refreshMessages)
-    window.addEventListener('focus', refreshMessages)
-    document.addEventListener('visibilitychange', refreshMessages)
-    queueMicrotask(refreshMessages)
-    return () => {
-      unsubscribe()
-      window.removeEventListener('focus', refreshMessages)
-      document.removeEventListener('visibilitychange', refreshMessages)
-    }
-  }, [])
-
-  const dataSource = useMemo(() => {
-    if (tab === 'all') return snapshot.all
-    return snapshot.all.filter((m) => m.channel === tab)
-  }, [snapshot.all, tab])
-
-  const columns: ColumnsType<InboxMessage> = [
+  // 只保存分页和筛选；通知、loading 和错误全部来自 Query/mutation。
+  const [input, setInput] = useState<NotificationQuery>({ page: 1, pageSize: 10, status: 'all' })
+  const { query, markRead } = useNotifications(input)
+  const data = query.data
+  const columns: ColumnsType<BusinessNotification> = [
     {
       title: '类型',
-      dataIndex: 'channel',
-      key: 'channel',
+      dataIndex: 'type',
+      key: 'type',
       width: 96,
-      render: (c: MessageChannel) => (
-        <Tag color={c === 'system' ? 'blue' : c === 'email' ? 'purple' : 'green'}>{channelLabel(c)}</Tag>
-      ),
+      render: (type: BusinessNotification['type']) => <Tag color="blue">{notificationTypeLabels[type]}</Tag>,
     },
     {
-      title: '发件人',
-      key: 'sender',
+      title: '标题',
+      dataIndex: 'title',
+      key: 'title',
       ellipsis: true,
-      render: (_, row) =>
-        row.channel === 'chat' ? (
-          <Space size={6} wrap>
-            <Text strong>{row.senderName}</Text>
-            {row.senderRole ? <Tag>{row.senderRole}</Tag> : null}
-          </Space>
-        ) : (
-          <Text strong>{row.senderName}</Text>
-        ),
     },
     {
       title: '日期',
-      dataIndex: 'dateLabel',
-      key: 'dateLabel',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
       width: 168,
+      render: formatNotificationTime,
     },
     {
-      title: ' ',
-      dataIndex: 'preview',
-      key: 'preview',
+      title: '内容',
+      dataIndex: 'content',
+      key: 'content',
       ellipsis: true,
     },
     {
       title: '状态',
-      dataIndex: 'read',
-      key: 'read',
+      dataIndex: 'readAt',
+      key: 'readAt',
       width: 88,
-      render: (read: boolean) =>
-        read ? <Text type="secondary">已读</Text> : <Text type="danger">未读</Text>,
+      render: (readAt: string | null) =>
+        readAt ? <Text type="secondary">已读</Text> : <Text type="danger">未读</Text>,
+    },
+    {
+      title: '操作', key: 'actions', width: 190,
+      render: (_, row) => (
+        <Space>
+          {row.batchId && <Link to={`/trace/${encodeURIComponent(row.batchId)}`}>查看批次</Link>}
+          {!row.readAt && <Button size="small"
+            loading={markRead.isPending && markRead.variables === row.id}
+            disabled={markRead.isPending}
+            onClick={() => markRead.mutate(row.id, { onSuccess: () => {
+              // 未读页最后一条被读掉后，回到上一页，避免停留在空页。
+              if (input.status === 'unread' && data?.items.length === 1 && input.page > 1) {
+                setInput((current) => current.page === input.page && current.status === input.status
+                  ? { ...current, page: current.page - 1 } : current)
+              }
+            } })}>
+            标记已读
+          </Button>}
+        </Space>
+      ),
     },
   ]
 
@@ -134,33 +122,54 @@ export default function MessagesPage() {
           ]}
         />
 
+        <Alert type={authMode === 'api' ? 'info' : 'warning'} showIcon
+          title={authMode === 'api' ? '真实业务通知' : '本地演示通知'}
+          description={authMode === 'api'
+            ? '消息保存在数据库；实时提示和重连会触发重新查询。当前建档产生新通知，聊天与邮件未接入。'
+            : '当前使用浏览器演示数据与本地已读记录，不连接通知后端，也不是实时聊天室。'}
+          style={{ marginBottom: 16 }} />
+        {query.error && <Alert type="error" showIcon title="通知查询失败"
+          description={query.error.message} style={{ marginBottom: 16 }} />}
+        {markRead.error && <Alert type="error" showIcon title="标记已读失败"
+          description={markRead.error.message} style={{ marginBottom: 16 }} />}
         <Card
-          bordered={false}
+          variant="borderless"
           extra={
             <Space>
-              <Text type="secondary">本地动态消息 {snapshot.dynamicCount} 条</Text>
-              <Button size="small" icon={<ReloadOutlined />} onClick={refreshMessages}>
+              <Text type="secondary">未读 {data?.unreadCount ?? '—'} 条</Text>
+              <Button size="small" icon={<ReloadOutlined />} loading={query.isFetching}
+                onClick={() => { void query.refetch() }}>
                 刷新消息
               </Button>
             </Space>
           }
         >
           <Tabs
-            activeKey={tab}
-            onChange={(k) => setTab(k as TabKey)}
+            activeKey={input.status}
+            onChange={(status) => {
+              if (status === 'all' || status === 'unread' || status === 'read') {
+                setInput((current) => ({ ...current, status, page: 1 }))
+              }
+            }}
             items={TAB_ITEMS.map((t) => ({ key: t.key, label: t.label }))}
           />
-          <Table<InboxMessage>
+          <Table<BusinessNotification>
             rowKey="id"
             size="small"
             columns={columns}
-            dataSource={dataSource}
-            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
-            locale={{ emptyText: '暂无消息' }}
+            dataSource={data?.items ?? []}
+            loading={query.isPending || query.isFetching}
+            pagination={{ current: input.page, pageSize: input.pageSize, total: data?.total ?? 0,
+              showSizeChanger: true, showTotal: (total) => `共 ${total} 条`,
+              onChange: (page, pageSize) => setInput((current) => ({ ...current,
+                page: pageSize === current.pageSize ? page : 1, pageSize })),
+            }}
+            scroll={{ x: 900 }}
+            locale={{ emptyText: query.error ? '通知暂不可用，请重试' : '暂无消息' }}
           />
         </Card>
 
-        <Card bordered={false} style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
+        <Card variant="borderless" style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
           <Text type="secondary">
             <BellOutlined /> 记得按时查收未读消息哦
           </Text>

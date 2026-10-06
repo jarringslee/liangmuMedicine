@@ -11,12 +11,12 @@ import { STAGE_LABEL } from '../types/herb'
 import { authMode } from '../config/api'
 
 /**
- * API 模式当前只完成真实读取。
+ * 此文件只服务于本地 demo；真实 API 写入由 herbDataSource 负责。
  */
 function assertDemoWrite(): void {
   if (authMode === 'api') {
     throw new Error(
-      '真实 API 当前只开放批次读取，写操作将在下一阶段接入',
+      '本地存储方法仅供 demo 模式，请通过统一数据源调用真实 API',
     )
   }
 }

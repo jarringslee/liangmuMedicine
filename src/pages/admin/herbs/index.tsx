@@ -27,6 +27,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SendOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -50,6 +51,8 @@ import type { AuditDecision } from '../../../services/herbDataSource'
 import { authMode } from '../../../config/api'
 
 import { useAuth } from '../../../hooks/useAuth'
+
+import RiskAnalysisDrawer from '../../../components/herb/RiskAnalysisDrawer'
 
 const { Header, Content } = Layout
 const { Text, Title } = Typography
@@ -81,6 +84,13 @@ export default function AdminHerbsPage() {
   const [keyword, setKeyword] = useState('')
   const [stage, setStage] = useState<Stage | 'all'>('all')
   const [audit, setAudit] = useState<AuditStatus | 'all'>('all')
+
+  const [riskBatchId, setRiskBatchId] =
+    useState<string | null>(null)
+
+  // 只保存选中 ID，批次内容始终从最新查询结果取得。
+  const riskBatch =
+    data.find((batch) => batch.id === riskBatchId) ?? null
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -226,7 +236,7 @@ export default function AdminHerbsPage() {
     {
       title: '操作',
       key: 'actions',
-      width: 280,
+      width: 360,
       fixed: 'right',
       render: (_, row) => (
         <Space size={4}>
@@ -237,6 +247,14 @@ export default function AdminHerbsPage() {
             onClick={() => navigate(`/trace/${row.traceCode}`, { state: { fromInternal: true } })}
           >
             查看
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<RobotOutlined />}
+            onClick={() => setRiskBatchId(row.id)}
+          >
+            AI 审核
           </Button>
           {row.stage === 'warehousing' ? (
             <Button
@@ -364,7 +382,7 @@ export default function AdminHerbsPage() {
             loading={loading}
             columns={columns}
             dataSource={filtered}
-            scroll={{ x: 1280 }}
+            scroll={{ x: 1360 }}
             pagination={{ pageSize: 8, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
             locale={{
               emptyText: <Empty description="暂无药材批次" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
@@ -372,6 +390,13 @@ export default function AdminHerbsPage() {
           />
         </Card>
       </Content>
+      {riskBatch && (
+        <RiskAnalysisDrawer
+          key={riskBatch.id}
+          batch={riskBatch}
+          onClose={() => setRiskBatchId(null)}
+        />
+      )}
     </Layout>
   )
 }

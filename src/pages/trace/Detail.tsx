@@ -49,6 +49,9 @@ import { filterEventsForRole } from '../../utils/herbEvents'
 import TraceQrPanel from '../../components/herb/TraceQrPanel'
 import TraceTimeline from '../../components/herb/TraceTimeline'
 import TraceQuickViewModal from '../../components/herb/TraceQuickViewModal'
+
+import HerbQuestionPanel from '../../components/herb/HerbQuestionPanel'
+
 import { AuditTag, RiskTag, StageTag } from '../../components/herb/herbTags'
 import { buildTraceUrl } from '../../utils/traceUrl'
 import {
@@ -548,6 +551,8 @@ function BatchView({
               </div>
             )}
           </Card>
+
+          <HerbQuestionPanel key={batch.id} batch={batch} />
 
           {showTimeline ? (
             <Card

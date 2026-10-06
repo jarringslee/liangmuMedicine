@@ -8,7 +8,8 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().trim().optional(),
+  DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-flash'),
   JWT_SECRET: z.preprocess(
     (value) => value === '' ? undefined : value,
     z.string().min(32, 'JWT_SECRET must contain at least 32 characters').optional(),

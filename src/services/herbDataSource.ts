@@ -35,7 +35,22 @@ import {
     type NewBatchInput,
 } from './herbStorage'
 // API请求工具，ApiError是自定义API异常类，apiRequest是封装好的http请求函数
-import { ApiError, apiRequest } from './api'
+import { ApiError, apiRequest, apiEventStream } from './api'
+import { parseRiskProgress, parseRiskResult, parseRiskStreamError } from './riskStreamContract'
+import { parseHerbQuestionReply } from './herbQuestionContract'
+import { answerDemoHerbQuestion } from './herbQuestionDemo'
+import type { HerbQuestionReply } from '../types/herbQuestion'
+
+import type {
+    RiskAnalysis,
+    RiskProgress,
+    RiskReviewInput,
+} from '../types/riskAnalysis'
+import {
+    analyzeDemoRisk,
+    getDemoRiskAnalysis,
+    reviewDemoRisk,
+} from './riskAnalysisDemo'
 
 /**
  * 远端API返回数据的TS类型定义
@@ -778,4 +793,138 @@ export async function confirmHerbReceipt(
     )
 
     return toDetailedHerbBatch(response.batch)
+}
+
+/** 查询最近一次风险分析；没有记录时返回 null。 */
+export async function getLatestRiskAnalysis(
+    batchId: string,
+    signal?: AbortSignal,
+): Promise<RiskAnalysis | null> {
+    if (authMode === 'demo') {
+        return getDemoRiskAnalysis(batchId)
+    }
+
+    const response = await apiRequest<{
+        analysis: RiskAnalysis | null
+    }>(
+        `/batches/${encodeURIComponent(batchId)}/risk-analysis`,
+        { signal },
+    )
+
+    return response.analysis
+}
+
+/** 发起分析；此操作只生成建议，不改变审核结论。 */
+export async function analyzeBatchRisk(
+    batchId: string,
+): Promise<RiskAnalysis> {
+    if (authMode === 'demo') {
+        return analyzeDemoRisk(batchId)
+    }
+
+    const response = await apiRequest<{
+        analysis: RiskAnalysis
+    }>(
+        `/batches/${encodeURIComponent(batchId)}/risk-analysis`,
+        {
+            method: 'POST',
+            // 多轮模型调用可能超过普通请求的 15 秒。
+            timeoutMs: 70_000,
+        },
+    )
+
+    return response.analysis
+}
+
+/** 管理员提交最终结论，并关联本次分析记录。 */
+export async function submitRiskReview(
+    batchId: string,
+    analysisId: string,
+    input: RiskReviewInput,
+): Promise<{
+    batchId: string
+    decision: RiskReviewInput['decision']
+}> {
+    if (authMode === 'demo') {
+        return reviewDemoRisk(batchId, analysisId, input)
+    }
+
+    return apiRequest<{
+        batchId: string
+        decision: RiskReviewInput['decision']
+    }>(
+        `/batches/${encodeURIComponent(batchId)}/risk-analysis/${encodeURIComponent(analysisId)}/review`,
+        {
+            method: 'POST',
+            body: input,
+        },
+    )
+}
+
+/** 通过同一数据源接入过程流；旧非流式接口保留，便于兼容和诊断。 */
+export async function streamBatchRisk(
+    batchId: string,
+    options: { signal: AbortSignal; onProgress: (progress: RiskProgress) => void },
+): Promise<RiskAnalysis> {
+    options.signal.throwIfAborted()
+    if (authMode === 'demo') {
+        // 本地规则很快完成，不伪造模型等待时间或 DeepSeek 工具过程。
+        options.onProgress({
+            seq: 1, stage: 'snapshot', status: 'running',
+            message: '本地规则演示：准备读取批次资料', at: new Date().toISOString(),
+        })
+        options.signal.throwIfAborted()
+        const analysis = await analyzeDemoRisk(batchId)
+        options.signal.throwIfAborted()
+        options.onProgress({
+            seq: 2, stage: 'save', status: 'completed',
+            message: '本地规则演示：建议已保存，等待人工复核', at: new Date().toISOString(),
+        })
+        return analysis
+    }
+    let result: RiskAnalysis | undefined
+    let lastSeq = 0
+    await apiEventStream(`/batches/${encodeURIComponent(batchId)}/risk-analysis/stream`, {
+        method: 'POST', signal: options.signal, timeoutMs: 70_000,
+        onMessage: ({ event, data }) => {
+            if (event === 'progress') {
+                const progress = parseRiskProgress(data, lastSeq)
+                lastSeq = progress.seq
+                options.onProgress(progress)
+            } else if (event === 'result') {
+                const analysis = data && typeof data === 'object' && 'analysis' in data ? data.analysis : undefined
+                result = parseRiskResult(analysis, batchId)
+                return true // 终态已收到，不再等待或自动重连。
+            } else if (event === 'error') {
+                throw parseRiskStreamError(data)
+            } else {
+                throw new ApiError(0, 'STREAM_INVALID', '收到未知分析事件')
+            }
+            return false
+        },
+    })
+    if (!result) throw new ApiError(0, 'STREAM_INCOMPLETE', '连接已结束但未收到完整建议，请重新查询或手动重试')
+    return result
+}
+
+/** 单轮资料问答：只提交问题，批次资料和权限由服务端读取。 */
+export async function askHerbQuestion(
+    batchId: string,
+    question: string,
+    signal: AbortSignal,
+): Promise<HerbQuestionReply> {
+    signal.throwIfAborted()
+    const trimmed = question.trim()
+    if (trimmed.length < 2 || trimmed.length > 500) throw new Error('问题需要 2～500 个字符')
+    if (authMode === 'demo') {
+        const batch = await getHerbBatchById(batchId)
+        signal.throwIfAborted()
+        if (!batch) throw new Error('药材批次不存在')
+        return parseHerbQuestionReply(answerDemoHerbQuestion(batch, trimmed), batchId)
+    }
+    const response = await apiRequest<{ reply: unknown }>(
+        `/batches/${encodeURIComponent(batchId)}/questions`,
+        { method: 'POST', body: { question: trimmed }, signal, timeoutMs: 70_000 },
+    )
+    return parseHerbQuestionReply(response.reply, batchId)
 }

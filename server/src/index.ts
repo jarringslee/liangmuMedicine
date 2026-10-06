@@ -1,10 +1,16 @@
+import { createServer } from 'node:http'
 import { createApp } from './app.js'
 import { env } from './config/env.js'
 import { prisma } from './lib/prisma.js'
+import { createAuthService } from './services/auth.js'
+import { attachNotificationRealtime } from './realtime/notifications.js'
 
-const app = createApp()
+const auth = createAuthService()
+const app = createApp(auth)
+const server = createServer(app)
+const io = attachNotificationRealtime(server, auth)
 
-const server = app.listen(env.PORT, () => {
+server.listen(env.PORT, () => {
   console.log(`liangmuMedicine API listening on http://localhost:${env.PORT}`)
 })
 
@@ -15,7 +21,8 @@ async function shutdown(signal: NodeJS.Signals) {
   shuttingDown = true
   console.log(`${signal} received, shutting down...`)
 
-  server.close(async (error) => {
+  // 关闭 Socket 后再关闭 HTTP，避免长连接阻止优雅退出。
+  io.close(async (error?: Error) => {
     await prisma.$disconnect()
 
     if (error) {

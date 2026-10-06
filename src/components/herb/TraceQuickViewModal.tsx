@@ -9,6 +9,9 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { AuditTag, RiskTag, StageTag } from './herbTags'
 import TraceTimeline from './TraceTimeline'
+
+import HerbQuestionPanel from './HerbQuestionPanel'
+
 import { HERB_CATEGORY_LABEL, type HerbBatch } from '../../types/herb'
 import type { UserRole } from '../../types/auth'
 import './TraceQuickViewModal.less'
@@ -152,6 +155,8 @@ export default function TraceQuickViewModal({ open, batch, role, onClose, onView
           >
             <TraceTimeline events={batch.events} role={role} />
           </Card>
+
+          {open && <HerbQuestionPanel key={batch.id} batch={batch} />}
         </Space>
       ) : null}
     </Modal>

@@ -39,7 +39,7 @@ export function retrieveQuestionSources(
   const documents = [...batchSources, ...getHerbKnowledge(herbName)]
   let query = question.replaceAll(herbName.trim(), '')
   // 少量可解释的词法扩展；不把它称为语义理解。
-  if (/产地|哪里|哪儿|来自|产区/.test(query)) query += ' 产地 来源'
+  if (/产地|哪里|哪儿|来自|产区|来源/.test(query)) query += ' 产地 来源'
   if (/外观|样子|颜色|形状|长什么/.test(query)) query += ' 外观'
   if (/叫什么|哪味|什么药材|名称/.test(query)) query += ' 药材名称'
   if (/介绍|概况|是什么/.test(query)) query += ' 来源 类别'

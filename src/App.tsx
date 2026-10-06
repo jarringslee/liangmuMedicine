@@ -24,6 +24,8 @@ import { useHerbQueryInvalidator } from './hooks/useHerbBatches'
 
 import { useNotificationRealtime } from './hooks/useNotifications'
 
+import AssistantProvider from './components/assistant/AssistantProvider'
+
 const appTheme = {
   token: {
     colorPrimary: '#2f6f4e',
@@ -36,7 +38,11 @@ export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={appTheme}>
       <BrowserRouter>
-        <AuthBoundary><HerbSyncBridge /></AuthBoundary>
+        <AuthBoundary>
+          <AssistantProvider>
+            <HerbSyncBridge />
+          </AssistantProvider>
+        </AuthBoundary>
       </BrowserRouter>
     </ConfigProvider>
   )

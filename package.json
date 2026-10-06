@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --test tests/auth.test.mjs tests/riskAnalysisDemo.test.mjs tests/riskAnalysisStream.test.mjs tests/herbQuestion.test.mjs tests/notifications.test.mjs",
+    "test": "node --test tests/auth.test.mjs tests/riskAnalysisDemo.test.mjs tests/riskAnalysisStream.test.mjs tests/herbQuestion.test.mjs tests/notifications.test.mjs tests/assistant.test.mjs tests/dashboard.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

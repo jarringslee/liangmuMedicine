@@ -612,7 +612,7 @@ test('列表支持搜索、状态筛选和分页', async () => {
   assert.deepEqual(pageBody.pagination, { page: 2, pageSize: 1, total: 3, totalPages: 3 })
 })
 
-test('详情支持 ID 和溯源码，并按角色过滤事件与审核记录', async () => {
+test('详情支持 ID、溯源码和批次号，并按角色过滤事件与审核记录', async () => {
   const adminResponse = await get('/api/batches/two', 'admin')
   assert.equal(adminResponse.status, 200)
   const adminBatch = (await adminResponse.json()).batch
@@ -625,15 +625,20 @@ test('详情支持 ID 和溯源码，并按角色过滤事件与审核记录', a
   const buyerBatch = (await buyerResponse.json()).batch
   assert.deepEqual(buyerBatch.events.map((event: { id: string }) => event.id), ['two-public-event'])
   assert.deepEqual(buyerBatch.audits, [])
+  const byBatchNo = await get('/api/batches/BATCH-two', 'buyer')
+  assert.equal(byBatchNo.status, 200)
+  assert.equal((await byBatchNo.json()).batch.id, 'two')
 })
 
 test('不可见批次和不存在批次统一返回 404', async () => {
   const otherOrganization = await get('/api/batches/three', 'grower')
   assert.equal(otherOrganization.status, 404)
   assert.equal((await otherOrganization.json()).error.code, 'BATCH_NOT_FOUND')
+  assert.equal((await get('/api/batches/BATCH-three', 'grower')).status, 404)
 
   const pendingForBuyer = await get('/api/batches/one', 'buyer')
   assert.equal(pendingForBuyer.status, 404)
+  assert.equal((await get('/api/batches/BATCH-one', 'buyer')).status, 404)
 
   const missing = await get('/api/batches/absent', 'admin')
   assert.equal(missing.status, 404)

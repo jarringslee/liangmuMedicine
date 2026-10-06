@@ -63,6 +63,51 @@ test('知识分块具有真实来源链接，只检索当前药材，未知药�
   assert.deepEqual(retrieveQuestionSources('量子纠缠发动机', '丹参', []), [])
 })
 
+test('小型词法召回评测：五味药材背景/批次事实/无依据，补齐黄精官方摘要', () => {
+  for (const herbName of ['甘草', '黄精', '丹参', '黄芪', '当归']) {
+    const sources = retrieveQuestionSources('这是什么', herbName, [])
+    assert.ok(sources.length > 0, herbName)
+    assert.ok(sources.every((source) => source.kind === 'knowledge'))
+  }
+  const sources = retrieveQuestionSources('黄精的来源与外观？', '黄精', [])
+  assert.ok(sources.every((source) => source.id.startsWith('knowledge:B00075:')))
+  assert.ok(sources.every((source) => source.url?.includes('pid=B00075')))
+  assert.ok(retrieveQuestionSources('本批次登记产地？', '黄精', buildQuestionBatchSources(fixture()))
+    .some((source) => source.id === 'batch:origin'))
+  assert.ok(retrieveQuestionSources('再详细介绍一下它的来源', '黄精', buildQuestionBatchSources(fixture()))
+    .some((source) => source.id === 'batch:origin'))
+  assert.deepEqual(retrieveQuestionSources('量子纠缠发动机', '黄精', []), [])
+  // 仅验证召回/隔离，不把这组测试当成模型答案正确率或语义检索评测。
+})
+
+test('批次前缀仅用于定位，不挤掉药材背景；有召回时补最小身份来源', async () => {
+  const { service, batch } = setup({ ...mockModel(), async complete(input) {
+    const sources = JSON.parse(input.messages.at(-1)!.content!).sources as { id: string }[]
+    assert.ok(sources.some((source) => source.id === 'knowledge:B00075:origin'))
+    assert.ok(sources.some((source) => source.id === 'batch:identity'))
+    assert.equal(sources.some((source) => source.id.startsWith('event:')), false)
+    return mockModel().complete(input)
+  } })
+  batch.herbName = '黄精'
+  await service.ask(buyer, batch.id, { question: '对于黄精批次 YM-TEST，这是什么？' })
+})
+
+test('未收录药材基础介绍无命中不调用模型，但批次产地仍可检索', async () => {
+  let calls = 0
+  const { service, batch } = setup({ ...mockModel(), async complete(input) { calls++; return mockModel().complete(input) } })
+  batch.herbName = '未收录药材'
+  assert.deepEqual(getHerbKnowledge('未收录药材'), [])
+  const missing = await service.ask(buyer, batch.id, { question: '这是什么' })
+  assert.equal(missing.status, 'insufficient')
+  assert.equal(missing.modelName, null)
+  assert.deepEqual(missing.citations, [])
+  assert.equal(calls, 0)
+  const origin = await service.ask(buyer, batch.id, { question: '本批次登记产地在哪里？' })
+  assert.equal(origin.status, 'answered')
+  assert.equal(origin.citations[0].id, 'batch:origin')
+  assert.equal(calls, 1)
+})
+
 test('问答只调用一次模型，返回服务端映射的引用与知识版本，不改变批次', async () => {
   const { service, batch, reads } = setup()
   const before = structuredClone(batch)
@@ -70,7 +115,7 @@ test('问答只调用一次模型，返回服务端映射的引用与知识版�
   assert.equal(result.batchId, batch.id)
   assert.equal(result.mode, 'api')
   assert.equal(result.retrieval, 'bm25')
-  assert.equal(result.knowledgeVersion, 'herb-knowledge-v1')
+  assert.equal(result.knowledgeVersion, 'herb-knowledge-v2')
   assert.ok(result.citations.length)
   assert.equal(result.citations[0].id, 'batch:origin')
   assert.equal(result.citations[0].url, null)

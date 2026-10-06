@@ -776,7 +776,7 @@ function listWhere(
 // 生成查询单条批次详情的where过滤条件
 function detailWhere(
     user: AuthUser,          // 当前登录用户
-    identifier: string,     // 前端传的标识，可以是id或者溯源码
+    identifier: string,     // 前端传的标识，可以是id、溯源码或者批次号
 ): Prisma.HerbBatchWhereInput {
     return {
         AND: [
@@ -785,6 +785,7 @@ function detailWhere(
                 OR: [
                     { id: identifier },         // 匹配批次id
                     { traceCode: identifier },   // 或者匹配溯源码
+                    { batchNo: identifier },     // 同样受上面的角色/组织范围约束
                 ],
             },
         ],

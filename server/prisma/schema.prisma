@@ -123,6 +123,7 @@ model User {
   audits              BatchAudit[]   @relation("AuditReviewer")
   uploadedAttachments Attachment[]   @relation("AttachmentUploader")
   notifications       Notification[]
+  assistantConversation AssistantConversation?
 
   @@index([role, status])
   @@index([organizationId])
@@ -157,6 +158,7 @@ model HerbBatch {
   audits        BatchAudit[]
   attachments   Attachment[]
   notifications Notification[]
+  assistantTurns AssistantTurn[]
 
   @@index([stage])
   @@index([auditStatus, riskLevel])
@@ -247,4 +249,49 @@ model Notification {
   @@index([recipientId, readAt])
   @@index([batchId])
   @@index([createdAt])
+}
+
+enum AssistantTurnStatus {
+  pending
+  done
+  error
+  stopped
+}
+
+// MVP 每账号一套会话；version 与短租约防止跨标签/进程并发覆盖。
+model AssistantConversation {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version          Int      @default(0)
+  runningRequestId String?
+  runningUntil     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  turns            AssistantTurn[]
+}
+
+model AssistantTurn {
+  id                  String                @id @default(cuid())
+  conversationId      String
+  conversation        AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  requestId           String
+  sequence            Int
+  question            String
+  requestedIdentifier String?
+  actorRole           UserRole
+  actorOrganizationId String?
+  batchId             String?
+  batch               HerbBatch?            @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchVersion        Int?
+  batchLabel          Json?
+  status              AssistantTurnStatus   @default(pending)
+  reply               Json?
+  errorCode           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@unique([conversationId, requestId])
+  @@unique([conversationId, sequence])
+  @@index([batchId])
 }

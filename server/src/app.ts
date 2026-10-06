@@ -21,6 +21,11 @@ import { createHerbQuestionRouter } from './routes/herbQuestion.js'
 import { createHerbQuestionService, type HerbQuestionService } from './services/herbQuestion.js'
 import { createNotificationRouter } from './routes/notifications.js'
 import { createNotificationService, type NotificationService } from './services/notifications.js'
+import { createAssistantRouter } from './routes/assistant.js'
+import { createAssistantService, type AssistantService } from './services/assistant.js'
+import { createAssistantConversationService, type AssistantConversationService } from './services/assistantConversation.js'
+import { createDashboardRouter } from './routes/dashboard.js'
+import { createDashboardService, type DashboardService } from './services/dashboard.js'
 // 批次业务服务工厂与类型定义
 import {
   createBatchService,
@@ -39,6 +44,9 @@ export function createApp(
   riskAnalysisService: RiskAnalysisService = createRiskAnalysisService(batchService),
   herbQuestionService: HerbQuestionService = createHerbQuestionService(batchService),
   notificationService: NotificationService = createNotificationService(),
+  assistantService: AssistantService = createAssistantService(),
+  assistantConversationService: AssistantConversationService = createAssistantConversationService({ batches: batchService, auth: authService }),
+  dashboardService: DashboardService = createDashboardService(),
 ) {
   // 初始化express app实例
   const app = express()
@@ -59,6 +67,8 @@ export function createApp(
   // 挂载鉴权相关接口 /api/auth，注入认证服务
   app.use('/api/auth', createAuthRouter(authService))
   app.use('/api/notifications', createNotificationRouter(authService, notificationService))
+  app.use('/api/assistant', createAssistantRouter(authService, assistantService, assistantConversationService))
+  app.use('/api/dashboard', createDashboardRouter(authService, dashboardService))
   app.use('/api/batches', createRiskAnalysisRouter(authService, riskAnalysisService))
   app.use('/api/batches', createHerbQuestionRouter(authService, herbQuestionService))
   // 挂载药材批次接口 /api/batches，注入鉴权服务和批次业务服务

@@ -76,15 +76,17 @@ export const deepseekAuditModel: AuditModel = {
           temperature: 0.1,
           max_tokens: 2_000,
           stream: false,
-          ...(input.json
-            ? { response_format: { type: 'json_object' } }
-            : { tools: input.tools, tool_choice: 'required' }),
+          ...(input.json ? { response_format: { type: 'json_object' } } : {}),
+          // 普通聊天没有工具；仅 Agent 传入工具时才要求工具调用。
+          ...(!input.json && input.tools?.length
+            ? { tools: input.tools, tool_choice: 'required' }
+            : {}),
         }),
         signal: input.signal,
       })
     } catch {
       if (input.signal.aborted) {
-        throw new HttpError(504, 'AI_TIMEOUT', 'AI 分析超时，请稍后重试')
+        throw new HttpError(504, 'AI_TIMEOUT', 'AI 请求超时，请稍后重试')
       }
       throw new HttpError(502, 'AI_UNAVAILABLE', '暂时无法连接 AI 服务')
     }
@@ -101,7 +103,7 @@ export const deepseekAuditModel: AuditModel = {
       payload = await response.json()
     } catch {
       if (input.signal.aborted) {
-        throw new HttpError(504, 'AI_TIMEOUT', 'AI 分析超时，请稍后重试')
+        throw new HttpError(504, 'AI_TIMEOUT', 'AI 请求超时，请稍后重试')
       }
       throw new HttpError(502, 'AI_INVALID_RESPONSE', 'AI 服务返回格式不正确')
     }
@@ -111,7 +113,7 @@ export const deepseekAuditModel: AuditModel = {
     }
     const choice = parsed.data.choices[0]
     if (!['stop', 'tool_calls'].includes(choice.finish_reason)) {
-      throw new HttpError(502, 'AI_INCOMPLETE_RESPONSE', 'AI 分析未完成，请重试')
+      throw new HttpError(502, 'AI_INCOMPLETE_RESPONSE', 'AI 回复未完成，请重试')
     }
     return {
       content: choice.message.content,

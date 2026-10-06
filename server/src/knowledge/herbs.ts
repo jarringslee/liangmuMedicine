@@ -3,7 +3,7 @@
  * 依据香港浸会大学公开可检索的记录摘要整理；未抓取全文或图片。
  * retrievedAt 是本项目核对日期，不是原站发布时间；来源支持知识背景，不证明某批次质量。
  */
-export const KNOWLEDGE_VERSION = 'herb-knowledge-v1'
+export const KNOWLEDGE_VERSION = 'herb-knowledge-v2'
 
 export type KnowledgeChunk = {
   id: string
@@ -16,6 +16,12 @@ export type KnowledgeChunk = {
 }
 
 const entries = [
+  {
+    herbName: '黄精', pid: 'B00075', retrievedAt: '2026-10-06',
+    // 核对官方可检索摘要；本轮原页面直连 403，不冒充完整药典或网页全文采集。
+    origin: '黄精属于根及根茎类药材，该记录介绍黄精植物 Polygonatum sibiricum 的干燥根茎。条目列举的常见产区包括内蒙古、陕西和河北；通用产区不能代替本批次登记产地。',
+    appearance: '条目描述黄精根茎呈结节状，有较粗的盘状端和较细的圆柱状端，表面偏黄棕，可见皱纹、茎痕或环节。外观资料不能确认某批次品种、含量或安全性。',
+  },
   {
     herbName: '丹参', pid: 'B00020',
     origin: '丹参属于根及根茎类药材，取自唇形科丹参植物的干燥根和根茎。资料列举的常见产区包括山东、江苏、安徽和四川。',
@@ -46,6 +52,6 @@ export const knowledgeChunks: KnowledgeChunk[] = entries.flatMap((entry) =>
     content: entry[section],
     url: `https://sys01.lib.hkbu.edu.hk/cmed/mmid/detail.php?pid=${entry.pid}&lang=chs`,
     publisher: '香港浸会大学中药材图像数据库（人工摘要）',
-    retrievedAt: '2026-10-05',
+    retrievedAt: 'retrievedAt' in entry ? entry.retrievedAt : '2026-10-05',
   })),
 )

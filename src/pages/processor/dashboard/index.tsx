@@ -32,6 +32,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
 import BatchQueryError from '../../../components/herb/BatchQueryError'
+import { MessageBell } from '../../../components/MessageBell'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import type { HerbBatch } from '../../../types/herb'
 import '../../dashboard/index.less'
@@ -89,42 +90,45 @@ export default function ProcessorDashboardPage() {
               良木药谷 · 加工商端
             </Title>
           </Space>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'profile',
-                  icon: <UserOutlined />,
-                  label: '个人中心',
-                  onClick: () => navigate('/profile'),
-                },
-                { type: 'divider' },
-                {
-                  key: 'logout',
-                  icon: <LogoutOutlined />,
-                  label: '退出登录',
-                  danger: true,
-                  onClick: handleLogout,
-                },
-              ],
-            }}
-            placement="bottomRight"
-            trigger={['click']}
-          >
-            <button type="button" className="processor-dashboard__user-trigger">
-              <Space>
-                <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
-                <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
-                  <div>
-                    <Text strong>{session?.displayName ?? '—'}</Text>
+          <Space size="middle">
+            <MessageBell />
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'profile',
+                    icon: <UserOutlined />,
+                    label: '个人中心',
+                    onClick: () => navigate('/profile'),
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                    danger: true,
+                    onClick: handleLogout,
+                  },
+                ],
+              }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <button type="button" className="processor-dashboard__user-trigger">
+                <Space>
+                  <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
+                  <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
+                    <div>
+                      <Text strong>{session?.displayName ?? '—'}</Text>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {session?.processorName ?? session?.roleLabel ?? '加工商'}
+                    </Text>
                   </div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {session?.processorName ?? session?.roleLabel ?? '加工商'}
-                  </Text>
-                </div>
-              </Space>
-            </button>
-          </Dropdown>
+                </Space>
+              </button>
+            </Dropdown>
+          </Space>
         </Flex>
       </Header>
 
@@ -146,7 +150,7 @@ export default function ProcessorDashboardPage() {
             </Title>
             <Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
               这里是 <strong>{session?.processorName ?? '我的加工厂'}</strong> 的加工工作台。
-              当前先展示已采收、加工中与入库阶段批次，后续会接入接收、工序录入与质检报告。
+              可在加工批次中完成接收、加工、质检与入库，并查看最近可处理批次。
             </Paragraph>
           </div>
           <div className="processor-dashboard__hero-actions">
@@ -156,9 +160,6 @@ export default function ProcessorDashboardPage() {
               onClick={() => navigate('/processor/batches')}
             >
               加工批次
-            </Button>
-            <Button icon={<ToolOutlined />} disabled>
-              工序录入（下一步）
             </Button>
           </div>
         </div>

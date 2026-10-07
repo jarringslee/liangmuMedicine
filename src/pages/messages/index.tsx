@@ -17,9 +17,11 @@ import type { ColumnsType } from 'antd/es/table'
 import { ArrowLeftOutlined, BellOutlined, MedicineBoxOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { authMode } from '../../config/api'
+import { useAuth } from '../../hooks/useAuth'
 import { useNotifications } from '../../hooks/useNotifications'
 import type { BusinessNotification, NotificationQuery } from '../../types/notification'
 import { formatNotificationTime, notificationTypeLabels } from '../../utils/notification'
+import { getRoleNavigation } from '../../utils/roleNavigation'
 import '../dashboard/index.less'
 
 const { Header, Content } = Layout
@@ -33,6 +35,8 @@ const TAB_ITEMS = [
 
 export default function MessagesPage() {
   const { token } = theme.useToken()
+  const { session } = useAuth()
+  const navigation = getRoleNavigation(session?.role ?? 'admin')
   // 只保存分页和筛选；通知、loading 和错误全部来自 Query/mutation。
   const [input, setInput] = useState<NotificationQuery>({ page: 1, pageSize: 10, status: 'all' })
   const { query, markRead } = useNotifications(input)
@@ -104,10 +108,10 @@ export default function MessagesPage() {
               消息中心
             </Title>
           </Space>
-          <Link to="/dashboard">
+          <Link to={navigation.homePath}>
             <Space>
               <ArrowLeftOutlined />
-              返回数据概览
+              返回{navigation.homeLabel}
             </Space>
           </Link>
         </Flex>
@@ -117,7 +121,7 @@ export default function MessagesPage() {
         <Breadcrumb
           style={{ marginBottom: 16 }}
           items={[
-            { title: <Link to="/dashboard">管理员端</Link> },
+            { title: <Link to={navigation.homePath}>{navigation.homeLabel}</Link> },
             { title: <span style={{ color: token.colorText }}>消息中心</span> },
           ]}
         />
@@ -125,7 +129,7 @@ export default function MessagesPage() {
         <Alert type={authMode === 'api' ? 'info' : 'warning'} showIcon
           title={authMode === 'api' ? '真实业务通知' : '本地演示通知'}
           description={authMode === 'api'
-            ? '消息保存在数据库；实时提示和重连会触发重新查询。当前建档产生新通知，聊天与邮件未接入。'
+            ? '消息按账号保存在数据库；建档、审核、采收和加工入库会生成对应业务通知，实时提示与重连会触发重新查询。人工聊天尚未接入。'
             : '当前使用浏览器演示数据与本地已读记录，不连接通知后端，也不是实时聊天室。'}
           style={{ marginBottom: 16 }} />
         {query.error && <Alert type="error" showIcon title="通知查询失败"

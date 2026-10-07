@@ -22,7 +22,7 @@ export function useNotifications(input: NotificationQuery) {
     const query = useQuery({
         queryKey: [...key, input],
         queryFn: ({ signal }) => listNotifications(input, signal),
-        enabled: isAuthenticated && session?.role === 'admin',
+        enabled: isAuthenticated,
         refetchOnWindowFocus: true,
     })
 
@@ -43,10 +43,9 @@ export function useNotificationRealtime() {
     const { session, isAuthenticated, logout } = useAuth()
     const queryClient = useQueryClient()
     const userId = session?.userId
-    const role = session?.role
 
     useEffect(() => {
-        if (!isAuthenticated || role !== 'admin') return
+        if (!isAuthenticated) return
 
         const invalidate = () => {
             void queryClient.invalidateQueries({
@@ -109,5 +108,5 @@ export function useNotificationRealtime() {
             socket.removeAllListeners()
             socket.disconnect()
         }
-    }, [isAuthenticated, userId, role, queryClient, logout])
+    }, [isAuthenticated, userId, queryClient, logout])
 }

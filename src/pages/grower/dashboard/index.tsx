@@ -34,6 +34,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { useHerbBatches } from '../../../hooks/useHerbBatches'
 import BatchQueryError from '../../../components/herb/BatchQueryError'
+import { MessageBell } from '../../../components/MessageBell'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import type { HerbBatch } from '../../../types/herb'
 import '../../dashboard/index.less'
@@ -90,42 +91,45 @@ export default function GrowerDashboardPage() {
               良木药谷 · 种植商端
             </Title>
           </Space>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'profile',
-                  icon: <UserOutlined />,
-                  label: '个人中心',
-                  onClick: () => navigate('/profile'),
-                },
-                { type: 'divider' },
-                {
-                  key: 'logout',
-                  icon: <LogoutOutlined />,
-                  label: '退出登录',
-                  danger: true,
-                  onClick: handleLogout,
-                },
-              ],
-            }}
-            placement="bottomRight"
-            trigger={['click']}
-          >
-            <button type="button" className="grower-dashboard__user-trigger">
-              <Space>
-                <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
-                <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
-                  <div>
-                    <Text strong>{session?.displayName ?? '—'}</Text>
+          <Space size="middle">
+            <MessageBell />
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'profile',
+                    icon: <UserOutlined />,
+                    label: '个人中心',
+                    onClick: () => navigate('/profile'),
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                    danger: true,
+                    onClick: handleLogout,
+                  },
+                ],
+              }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <button type="button" className="grower-dashboard__user-trigger">
+                <Space>
+                  <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
+                  <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
+                    <div>
+                      <Text strong>{session?.displayName ?? '—'}</Text>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {session?.growerName ?? session?.roleLabel ?? '种植商'}
+                    </Text>
                   </div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {session?.growerName ?? session?.roleLabel ?? '种植商'}
-                  </Text>
-                </div>
-              </Space>
-            </button>
-          </Dropdown>
+                </Space>
+              </button>
+            </Dropdown>
+          </Space>
         </Flex>
       </Header>
 

@@ -5,7 +5,7 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 
 // Vite 负责转换 TS/import.meta.env，Node 内置测试器负责断言；无需安装第二套构建工具。
-let vite, auth, api, storage, queryClient
+let vite, auth, api, storage, navigation, queryClient
 const realFetch = globalThis.fetch
 const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
 const user = (role = 'admin') => ({
@@ -30,6 +30,7 @@ async function setup(mode = 'development') {
   auth = await vite.ssrLoadModule('/src/services/auth.ts')
   api = await vite.ssrLoadModule('/src/services/api.ts')
   storage = await vite.ssrLoadModule('/src/utils/auth.ts')
+  navigation = await vite.ssrLoadModule('/src/utils/roleNavigation.ts')
   queryClient = (await vite.ssrLoadModule('/src/services/queryClient.ts')).queryClient
   queryClient.setDefaultOptions({ queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } })
 }
@@ -63,7 +64,9 @@ test('API 登录只保存 Token，角色/组织映射到现有页面字段', asy
   const session = await auth.login({ ...credentials, role: 'grower' })
   assert.equal(request.url, '/api/auth/login')
   assert.equal(request.options.headers.Authorization, undefined)
+  assert.equal(session.username, 'grower')
   assert.equal(session.growerId, 'org-grower')
+  assert.equal(session.organizationName, '测试组织')
   assert.equal(storage.getAccessToken(), 'new-token')
   assert.equal(storage.getAuthSession(), null)
   assert.equal(auth.getAuthSnapshot().status, 'authenticated')
@@ -212,6 +215,23 @@ test('redirect 拒绝外链、反斜杠、控制字符和登录循环，允许�
   assert.equal(storage.sanitizeRedirectPath('/trace/code?from=list'), '/trace/code?from=list')
 })
 
+test('四角色导航集中映射到真实工作台和业务列表', () => {
+  const expected = {
+    admin: ['/dashboard', '管理员端', '/admin/herbs', '药材管理'],
+    grower: ['/grower/dashboard', '种植商端', '/grower/batches', '我的批次'],
+    processor: ['/processor/dashboard', '加工商端', '/processor/batches', '加工批次'],
+    buyer: ['/buyer/herbs', '采购商端', '/buyer/herbs', '药材列表'],
+  }
+  for (const [role, values] of Object.entries(expected)) {
+    const result = navigation.getRoleNavigation(role)
+    assert.deepEqual(
+      [result.homePath, result.homeLabel, result.resourcePath, result.resourceLabel],
+      values,
+    )
+    assert.equal(navigation.getDefaultHome(role), values[0])
+  }
+})
+
 test('显式 demo 模式完全不请求后端，仍支持四角色演示', async () => {
   auth.logout()
   await vite.close()
@@ -219,7 +239,10 @@ test('显式 demo 模式完全不请求后端，仍支持四角色演示', async
   globalThis.fetch = () => { throw new Error('演示模式不得请求 API') }
   for (const [account, role] of [['lijialin', 'admin'], ['yuanyuhang', 'grower'], ['haorunyuan', 'processor'], ['chenjingxuan', 'buyer']]) {
     await auth.login({ account, role, password: `${account}123` })
-    assert.equal(auth.getAuthSnapshot().session.role, role)
+    const session = auth.getAuthSnapshot().session
+    assert.equal(session.role, role)
+    assert.equal(session.username, account)
+    assert.equal(typeof session.organizationName, 'string')
     assert.equal(storage.getAccessToken(), null)
     assert.equal(storage.getAuthSession().role, role)
     auth.logout()

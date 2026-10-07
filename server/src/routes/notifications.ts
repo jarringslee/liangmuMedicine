@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate } from '../middleware/auth.js'
 import type { AuthService } from '../services/auth.js'
 import type { NotificationService } from '../services/notifications.js'
 
@@ -15,7 +15,8 @@ export function createNotificationRouter(auth: AuthService, notifications: Notif
   const router = Router()
   // 用户私有通知不能被浏览器/代理作为公共响应缓存。
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next() })
-  router.use(authenticate(auth), requireRoles('admin'))
+  // 四角色都可读取本人业务通知；recipientId 始终来自 JWT，不接受客户端指定。
+  router.use(authenticate(auth))
   router.get('/', async (req, res) => {
     res.json(await notifications.list(req.auth!, querySchema.parse(req.query)))
   })

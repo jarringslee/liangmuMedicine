@@ -43,21 +43,15 @@ const repository: NotificationRepository = {
   },
 }
 
-function requireAdmin(user: AuthUser) {
-  if (user.role !== 'admin') throw new HttpError(403, 'FORBIDDEN', '当前仅管理员可使用消息中心')
-}
-
 export function createNotificationService(
   messages: NotificationRepository = repository,
   changes: NotificationChanges = notificationChanges,
 ) {
   return {
     async list(user: AuthUser, query: NotificationQuery) {
-      requireAdmin(user)
       return { ...await messages.list(user.id, query), page: query.page, pageSize: query.pageSize }
     },
     async markRead(user: AuthUser, id: string) {
-      requireAdmin(user)
       const item = await messages.markRead(user.id, id)
       if (!item) throw new HttpError(404, 'NOT_FOUND', '通知不存在')
       changes.publish([user.id])

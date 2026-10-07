@@ -322,6 +322,299 @@ export async function createSubmittedBatch(
     return batch
 }
 
+type NotificationMutationResult<T> = {
+    result: T
+    recipientIds: string[]
+}
+
+type NotificationTransaction<T> = (
+    work: (
+        tx: Prisma.TransactionClient,
+    ) => Promise<NotificationMutationResult<T>>,
+) => Promise<NotificationMutationResult<T>>
+
+type NotificationPublisher = (recipientIds: string[]) => void
+
+type NotificationDraft = Pick<
+    Prisma.NotificationCreateManyInput,
+    'batchId' | 'type' | 'title' | 'content'
+>
+
+async function activeUserIds(
+    tx: Prisma.TransactionClient,
+    where: Prisma.UserWhereInput,
+): Promise<string[]> {
+    const users = await tx.user.findMany({ where, select: { id: true } })
+    return users.map(({ id }) => id)
+}
+
+async function createNotifications(
+    tx: Prisma.TransactionClient,
+    recipientIds: string[],
+    notification: NotificationDraft,
+) {
+    if (!recipientIds.length) return
+    await tx.notification.createMany({
+        data: recipientIds.map((recipientId) => ({
+            recipientId,
+            ...notification,
+        })),
+    })
+}
+
+function activeGrowerIds(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+) {
+    return activeUserIds(tx, {
+        role: 'grower',
+        status: 'active',
+        organizationId,
+        organization: { is: { type: 'grower', enabled: true } },
+    })
+}
+
+function activeProcessorIds(tx: Prisma.TransactionClient) {
+    return activeUserIds(tx, {
+        role: 'processor',
+        status: 'active',
+        organization: { is: { type: 'processor', enabled: true } },
+    })
+}
+
+function activeAdminIds(tx: Prisma.TransactionClient) {
+    return activeUserIds(tx, {
+        role: 'admin',
+        status: 'active',
+        OR: [
+            { organizationId: null },
+            { organization: { is: { type: 'platform', enabled: true } } },
+        ],
+    })
+}
+
+/** 审核、审核记录、事件和种植商通知同事务提交；采收已完成时同时提醒加工商。 */
+export async function auditBatchWithNotifications(
+    input: BatchAuditRepositoryInput,
+    transaction: NotificationTransaction<BatchDetailRecord> =
+        (work) => prisma.$transaction(work),
+    publish: NotificationPublisher = (ids) => notificationChanges.publish(ids),
+): Promise<BatchDetailRecord> {
+    const { result: batch, recipientIds } = await transaction(async (tx) => {
+        const batch = await tx.herbBatch.update({
+            where: { id: input.batchId },
+            data: {
+                auditStatus: input.decision,
+                riskLevel: input.riskLevel,
+                version: { increment: 1 },
+                audits: {
+                    create: {
+                        reviewer: { connect: { id: input.reviewerId } },
+                        reviewerName: input.reviewerName,
+                        decision: input.decision,
+                        source: 'manual',
+                        riskLevel: input.riskLevel,
+                        reason: input.reason,
+                    },
+                },
+                events: {
+                    create: {
+                        type: 'audit',
+                        title: input.decision === 'approved'
+                            ? '管理员审核通过'
+                            : '管理员审核驳回',
+                        description: input.reason,
+                        occurredAt: new Date(),
+                        operator: { connect: { id: input.reviewerId } },
+                        operatorName: input.reviewerName,
+                        operatorRole: 'admin',
+                        visibleRoles: [],
+                    },
+                },
+            },
+            select: batchDetailSelect,
+        })
+
+        const growerIds = await activeGrowerIds(
+            tx,
+            batch.growerOrganization.id,
+        )
+        const decisionLabel = input.decision === 'approved' ? '审核通过' : '审核驳回'
+        await createNotifications(tx, growerIds, {
+            batchId: batch.id,
+            type: 'auditResult',
+            title: `${batch.herbName}批次${decisionLabel}`,
+            content: `${batch.batchNo} 已${decisionLabel}${input.reason ? `：${input.reason}` : '。'}`,
+        })
+
+        let processorIds: string[] = []
+        if (
+            input.decision === 'approved' &&
+            batch.stage === 'harvested' &&
+            batch.requiresProcessing
+        ) {
+            processorIds = await activeProcessorIds(tx)
+            await createNotifications(tx, processorIds, {
+                batchId: batch.id,
+                type: 'stageChanged',
+                title: `${batch.herbName}批次等待接收加工`,
+                content: `${batch.batchNo} 已完成采收并审核通过，可进入加工接收流程。`,
+            })
+        }
+
+        return {
+            result: batch,
+            recipientIds: [...new Set([...growerIds, ...processorIds])],
+        }
+    })
+
+    if (recipientIds.length) publish(recipientIds)
+    return batch
+}
+
+/** 采收数据、阶段事件和加工商通知同事务提交。 */
+export async function harvestBatchWithNotifications(
+    input: BatchHarvestRepositoryInput,
+    transaction: NotificationTransaction<BatchDetailRecord> =
+        (work) => prisma.$transaction(work),
+    publish: NotificationPublisher = (ids) => notificationChanges.publish(ids),
+): Promise<BatchDetailRecord> {
+    const { result: batch, recipientIds } = await transaction(async (tx) => {
+        const description =
+            `采收日期：${input.harvestDate}\n` +
+            `采收数量：${input.yieldKg.toFixed(2)} kg` +
+            (input.plotArea ? `\n采收地块：${input.plotArea}` : '') +
+            (input.harvesterName ? `\n采收人员：${input.harvesterName}` : '') +
+            (input.note ? `\n备注：${input.note}` : '')
+
+        const batch = await tx.herbBatch.update({
+            where: { id: input.batchId },
+            data: {
+                stage: 'harvested',
+                version: { increment: 1 },
+                events: {
+                    create: [
+                        {
+                            type: 'note',
+                            title: '采收登记',
+                            description,
+                            occurredAt: input.harvestDateValue,
+                            operator: { connect: { id: input.operatorId } },
+                            operatorName: input.operatorName,
+                            operatorRole: 'grower',
+                            visibleRoles: [],
+                        },
+                        {
+                            type: 'stageChange',
+                            title: '阶段变更：种植中 → 已采收',
+                            description: `采收完成：${input.yieldKg.toFixed(2)} kg`,
+                            occurredAt: new Date(),
+                            operator: { connect: { id: input.operatorId } },
+                            operatorName: input.operatorName,
+                            operatorRole: 'grower',
+                            visibleRoles: [],
+                            fromStage: 'planting',
+                            toStage: 'harvested',
+                        },
+                    ],
+                },
+            },
+            select: batchDetailSelect,
+        })
+
+        const recipientIds = batch.auditStatus === 'approved' && batch.requiresProcessing
+            ? await activeProcessorIds(tx)
+            : []
+        await createNotifications(tx, recipientIds, {
+            batchId: batch.id,
+            type: 'stageChanged',
+            title: `${batch.herbName}批次等待接收加工`,
+            content: `${batch.batchNo} 已完成采收并审核通过，可进入加工接收流程。`,
+        })
+
+        return { result: batch, recipientIds }
+    })
+
+    if (recipientIds.length) publish(recipientIds)
+    return batch
+}
+
+/** 加工完成、阶段事件和管理员入库通知同事务提交。 */
+export async function completeProcessingWithNotifications(
+    input: CompleteProcessingRepositoryInput,
+    transaction: NotificationTransaction<BatchDetailRecord | null> =
+        (work) => prisma.$transaction(work),
+    publish: NotificationPublisher = (ids) => notificationChanges.publish(ids),
+): Promise<BatchDetailRecord | null> {
+    const { result: batch, recipientIds } = await transaction(async (tx) => {
+        const changedAt = new Date()
+        const completed = await tx.herbBatch.updateMany({
+            where: {
+                id: input.batchId,
+                version: input.expectedVersion,
+                stage: 'processing',
+                auditStatus: 'approved',
+                processorOrganizationId: input.processorOrganizationId,
+            },
+            data: {
+                stage: 'warehousing',
+                version: { increment: 1 },
+            },
+        })
+        if (completed.count !== 1) {
+            return { result: null, recipientIds: [] }
+        }
+
+        await tx.batchEvent.createMany({
+            data: [
+                {
+                    batchId: input.batchId,
+                    type: 'note',
+                    title: '加工完成记录',
+                    description: input.note,
+                    occurredAt: changedAt,
+                    operatorId: input.operatorId,
+                    operatorName: input.operatorName,
+                    operatorRole: 'processor',
+                    visibleRoles: [],
+                },
+                {
+                    batchId: input.batchId,
+                    type: 'stageChange',
+                    title: '阶段变更：加工中 → 仓储',
+                    description: '加工完成，批次进入仓储阶段。',
+                    occurredAt: changedAt,
+                    operatorId: input.operatorId,
+                    operatorName: input.operatorName,
+                    operatorRole: 'processor',
+                    visibleRoles: [],
+                    fromStage: 'processing',
+                    toStage: 'warehousing',
+                },
+            ],
+        })
+
+        const batch = await tx.herbBatch.findUnique({
+            where: { id: input.batchId },
+            select: batchDetailSelect,
+        })
+        if (!batch) return { result: null, recipientIds: [] }
+
+        const recipientIds = await activeAdminIds(tx)
+        await createNotifications(tx, recipientIds, {
+            batchId: batch.id,
+            type: 'stageChanged',
+            title: `${batch.herbName}批次已完成加工入库`,
+            content: `${batch.batchNo} 已由${input.operatorName}完成加工并进入仓储，请查看最新档案。`,
+        })
+
+        return { result: batch, recipientIds }
+    })
+
+    if (batch && recipientIds.length) publish(recipientIds)
+    return batch
+}
+
 // 创建实例，实现上面 BatchRepository 接口
 const repository: BatchRepository = {
     count: (where) => prisma.herbBatch.count({ where }),
@@ -347,45 +640,7 @@ const repository: BatchRepository = {
 
     create: createSubmittedBatch,
 
-    // 状态、审核记录和审核事件使用 nested write 原子更新，避免只写成功一部分。
-    audit: (input) =>
-        prisma.herbBatch.update({
-            where: { id: input.batchId },
-            data: {
-                auditStatus: input.decision,
-                riskLevel: input.riskLevel,
-                version: { increment: 1 },
-                audits: {
-                    create: {
-                        reviewer: {
-                            connect: { id: input.reviewerId },
-                        },
-                        reviewerName: input.reviewerName,
-                        decision: input.decision,
-                        source: 'manual',
-                        riskLevel: input.riskLevel,
-                        reason: input.reason,
-                    },
-                },
-                events: {
-                    create: {
-                        type: 'audit',
-                        title: input.decision === 'approved'
-                            ? '管理员审核通过'
-                            : '管理员审核驳回',
-                        description: input.reason,
-                        occurredAt: new Date(),
-                        operator: {
-                            connect: { id: input.reviewerId },
-                        },
-                        operatorName: input.reviewerName,
-                        operatorRole: 'admin',
-                        visibleRoles: [],
-                    },
-                },
-            },
-            select: batchDetailSelect,
-        }),
+    audit: auditBatchWithNotifications,
 
     appendEvent: (input) =>
         prisma.herbBatch.update({
@@ -410,54 +665,7 @@ const repository: BatchRepository = {
             select: batchDetailSelect,
         }),
 
-    // 阶段、采收事件和阶段变更事件在同一次 nested write 中提交。
-    harvest: (input) => {
-        const description =
-            `采收日期：${input.harvestDate}\n` +
-            `采收数量：${input.yieldKg.toFixed(2)} kg` +
-            (input.plotArea ? `\n采收地块：${input.plotArea}` : '') +
-            (input.harvesterName ? `\n采收人员：${input.harvesterName}` : '') +
-            (input.note ? `\n备注：${input.note}` : '')
-
-        return prisma.herbBatch.update({
-            where: { id: input.batchId },
-            data: {
-                stage: 'harvested',
-                version: { increment: 1 },
-                events: {
-                    create: [
-                        {
-                            type: 'note',
-                            title: '采收登记',
-                            description,
-                            occurredAt: input.harvestDateValue,
-                            operator: {
-                                connect: { id: input.operatorId },
-                            },
-                            operatorName: input.operatorName,
-                            operatorRole: 'grower',
-                            visibleRoles: [],
-                        },
-                        {
-                            type: 'stageChange',
-                            title: '阶段变更：种植中 → 已采收',
-                            description: `采收完成：${input.yieldKg.toFixed(2)} kg`,
-                            occurredAt: new Date(),
-                            operator: {
-                                connect: { id: input.operatorId },
-                            },
-                            operatorName: input.operatorName,
-                            operatorRole: 'grower',
-                            visibleRoles: [],
-                            fromStage: 'planting',
-                            toStage: 'harvested',
-                        },
-                    ],
-                },
-            },
-            select: batchDetailSelect,
-        })
-    },
+    harvest: harvestBatchWithNotifications,
 
     receiveProcessing: (input) => prisma.$transaction(async (transaction) => {
         const changedAt = new Date()
@@ -502,57 +710,7 @@ const repository: BatchRepository = {
         })
     }),
 
-    completeProcessing: (input) => prisma.$transaction(async (transaction) => {
-        const changedAt = new Date()
-        const completed = await transaction.herbBatch.updateMany({
-            where: {
-                id: input.batchId,
-                version: input.expectedVersion,
-                stage: 'processing',
-                auditStatus: 'approved',
-                processorOrganizationId: input.processorOrganizationId,
-            },
-            data: {
-                stage: 'warehousing',
-                version: { increment: 1 },
-            },
-        })
-        if (completed.count !== 1) return null
-
-        await transaction.batchEvent.createMany({
-            data: [
-                {
-                    batchId: input.batchId,
-                    type: 'note',
-                    title: '加工完成记录',
-                    description: input.note,
-                    occurredAt: changedAt,
-                    operatorId: input.operatorId,
-                    operatorName: input.operatorName,
-                    operatorRole: 'processor',
-                    visibleRoles: [],
-                },
-                {
-                    batchId: input.batchId,
-                    type: 'stageChange',
-                    title: '阶段变更：加工中 → 仓储',
-                    description: '加工完成，批次进入仓储阶段。',
-                    occurredAt: changedAt,
-                    operatorId: input.operatorId,
-                    operatorName: input.operatorName,
-                    operatorRole: 'processor',
-                    visibleRoles: [],
-                    fromStage: 'processing',
-                    toStage: 'warehousing',
-                },
-            ],
-        })
-
-        return transaction.herbBatch.findUnique({
-            where: { id: input.batchId },
-            select: batchDetailSelect,
-        })
-    }),
+    completeProcessing: completeProcessingWithNotifications,
 
     saveProcessingQualityReport: (input) => prisma.$transaction(async (transaction) => {
         const changedAt = new Date()

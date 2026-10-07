@@ -17,7 +17,12 @@ process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:1/test'
 process.env.CLIENT_ORIGIN = 'http://localhost:5173'
 const { createNotificationChanges } = await import('../src/services/notificationChanges.js')
 const { createNotificationService } = await import('../src/services/notifications.js')
-const { createSubmittedBatch } = await import('../src/services/batches.js')
+const {
+  auditBatchWithNotifications,
+  completeProcessingWithNotifications,
+  createSubmittedBatch,
+  harvestBatchWithNotifications,
+} = await import('../src/services/batches.js')
 const { createNotificationRouter } = await import('../src/routes/notifications.js')
 const { attachNotificationRealtime } = await import('../src/realtime/notifications.js')
 const { HttpError, errorHandler } = await import('../src/middleware/error.js')
@@ -79,7 +84,9 @@ test('通知服务按收件人隔离，未读数不受筛选分页影响；越�
   assert.equal(page.unreadCount, 1)
   assert.equal((await service.list(admin('admin-b'), { page: 1, pageSize: 10, status: 'all' })).total, 0)
   for (const id of ['notice-1', 'unknown']) await assert.rejects(service.markRead(admin('admin-b'), id), { status: 404 })
-  await assert.rejects(service.list({ ...admin(), role: 'buyer' }, { page: 1, pageSize: 10, status: 'all' }), { status: 403 })
+  assert.equal((await service.list({ ...admin('buyer-a'), role: 'buyer' }, {
+    page: 1, pageSize: 10, status: 'all',
+  })).total, 0)
 })
 
 test('标记已读幂等，只通知当前收件人，数据库失败不发送提示', async () => {
@@ -103,7 +110,9 @@ test('通知 HTTP 认证、角色、严格查询/请求体和已读响应契约'
   try {
     assert.equal((await fetch(`${url}/api/notifications`)).status, 401)
     const headers = { Authorization: `Bearer ${await signAccessToken('admin-a')}`, 'Content-Type': 'application/json' }
-    assert.equal((await fetch(`${url}/api/notifications`, { headers: { Authorization: `Bearer ${await signAccessToken('grower')}` } })).status, 403)
+    assert.equal((await fetch(`${url}/api/notifications`, {
+      headers: { Authorization: `Bearer ${await signAccessToken('grower')}` },
+    })).status, 200)
     for (const query of ['?recipientId=admin-b', '?page=0', '?pageSize=101', '?status=chat', '?page=1&page=2']) {
       assert.equal((await fetch(`${url}/api/notifications${query}`, { headers })).status, 400)
     }
@@ -147,6 +156,99 @@ test('建档事务内生成有效管理员通知，提交前不推送；失败�
   assert.equal(published, 1)
 })
 
+test('审核结果通知所属种植商，已采收且通过时同时通知有效加工商', async () => {
+  const batch = {
+    id: 'batch-audit', batchNo: 'YM-AUDIT', herbName: '黄芪', stage: 'harvested',
+    requiresProcessing: true, growerOrganization: { id: 'grower-org' },
+  } as BatchDetailRecord
+  const notifications: { recipientId: string; type: string; title: string }[] = []
+  let committed = false
+  const tx = {
+    herbBatch: { async update() { return batch } },
+    user: { async findMany(args: { where: { role: string; organizationId?: string } }) {
+      if (args.where.role === 'grower') {
+        assert.equal(args.where.organizationId, 'grower-org')
+        return [{ id: 'grower-a' }]
+      }
+      assert.equal(args.where.role, 'processor')
+      return [{ id: 'processor-a' }, { id: 'processor-b' }]
+    } },
+    notification: { async createMany(args: { data: typeof notifications }) {
+      assert.equal(committed, false)
+      notifications.push(...args.data)
+    } },
+  } as unknown as Prisma.TransactionClient
+  const published: string[][] = []
+  const result = await auditBatchWithNotifications({
+    batchId: batch.id, decision: 'approved', reason: '资料完整', riskLevel: 'low',
+    reviewerId: 'admin-a', reviewerName: '管理员',
+  }, async (work) => {
+    const result = await work(tx)
+    committed = true
+    return result
+  }, (ids) => {
+    assert.equal(committed, true)
+    published.push(ids)
+  })
+  assert.equal(result, batch)
+  assert.deepEqual(published, [['grower-a', 'processor-a', 'processor-b']])
+  assert.deepEqual(notifications.map(({ recipientId, type }) => [recipientId, type]), [
+    ['grower-a', 'auditResult'],
+    ['processor-a', 'stageChanged'],
+    ['processor-b', 'stageChanged'],
+  ])
+})
+
+test('审核通过的采收事务通知加工商；加工入库事务通知管理员', async () => {
+  const harvested = {
+    id: 'batch-harvest', batchNo: 'YM-HARVEST', herbName: '丹参',
+    auditStatus: 'approved', requiresProcessing: true,
+  } as BatchDetailRecord
+  const warehousing = {
+    ...harvested, id: 'batch-processing', batchNo: 'YM-PROCESSING', stage: 'warehousing',
+  } as BatchDetailRecord
+  const harvestNotices: { recipientId: string; type: string }[] = []
+  const harvestTx = {
+    herbBatch: { async update() { return harvested } },
+    user: { async findMany() { return [{ id: 'processor-a' }] } },
+    notification: { async createMany(args: { data: typeof harvestNotices }) {
+      harvestNotices.push(...args.data)
+    } },
+  } as unknown as Prisma.TransactionClient
+  const harvestPublished: string[][] = []
+  await harvestBatchWithNotifications({
+    batchId: harvested.id, harvestDate: '2026-10-07', harvestDateValue: new Date(),
+    yieldKg: 12.5, operatorId: 'grower-a', operatorName: '种植商',
+  }, async (work) => work(harvestTx), (ids) => harvestPublished.push(ids))
+  assert.deepEqual(harvestPublished, [['processor-a']])
+  assert.deepEqual(harvestNotices.map(({ recipientId, type }) => [recipientId, type]), [
+    ['processor-a', 'stageChanged'],
+  ])
+
+  const processingNotices: { recipientId: string; type: string }[] = []
+  const processingTx = {
+    herbBatch: {
+      async updateMany() { return { count: 1 } },
+      async findUnique() { return warehousing },
+    },
+    batchEvent: { async createMany() { return { count: 2 } } },
+    user: { async findMany() { return [{ id: 'admin-a' }, { id: 'admin-b' }] } },
+    notification: { async createMany(args: { data: typeof processingNotices }) {
+      processingNotices.push(...args.data)
+    } },
+  } as unknown as Prisma.TransactionClient
+  const processingPublished: string[][] = []
+  await completeProcessingWithNotifications({
+    batchId: warehousing.id, expectedVersion: 2, processorOrganizationId: 'processor-org',
+    operatorId: 'processor-a', operatorName: '加工商', note: '加工完成',
+  }, async (work) => work(processingTx), (ids) => processingPublished.push(ids))
+  assert.deepEqual(processingPublished, [['admin-a', 'admin-b']])
+  assert.deepEqual(processingNotices.map(({ recipientId, type }) => [recipientId, type]), [
+    ['admin-a', 'stageChanged'],
+    ['admin-b', 'stageChanged'],
+  ])
+})
+
 test('提示总线去重、取消订阅，监听器异常不会影响已提交业务', () => {
   const changes = createNotificationChanges(); let calls = 0
   const unsubscribe = changes.subscribe((ids) => { calls++; assert.deepEqual(ids, ['a']) })
@@ -162,7 +264,7 @@ test('真实 Socket 握手验签/角色/Origin，不允许前端冒领用户房�
   const sockets: Socket[] = []
   try {
     for (const input of [
-      { token: 'invalid' }, { token: await signAccessToken('grower') },
+      { token: 'invalid' },
       { token: await signAccessToken('admin-a'), recipientId: 'admin-b' },
     ]) {
       const socket = client(url, input.token); sockets.push(socket); socket.auth = input
@@ -172,6 +274,9 @@ test('真实 Socket 握手验签/角色/Origin，不允许前端冒领用户房�
     const evil = client(url, await signAccessToken('admin-a'), 'https://evil.example'); sockets.push(evil)
     const rejected = event(evil, 'connect_error'); evil.connect(); await rejected
     assert.equal(evil.connected, false)
+    const grower = client(url, await signAccessToken('grower')); sockets.push(grower)
+    const connected = event(grower, 'connect'); grower.connect(); await connected
+    assert.equal(grower.connected, true)
   } finally { sockets.forEach((socket) => socket.disconnect()); await new Promise<void>((resolve) => io.close(() => resolve())) }
 })
 

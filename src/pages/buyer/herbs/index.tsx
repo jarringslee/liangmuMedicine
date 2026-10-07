@@ -37,6 +37,7 @@ import {
   useHerbBatches,
 } from '../../../hooks/useHerbBatches'
 import BatchQueryError from '../../../components/herb/BatchQueryError'
+import { MessageBell } from '../../../components/MessageBell'
 import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import QrScanDrawer from '../../../components/herb/QrScanDrawer'
 import TraceQuickViewModal from '../../../components/herb/TraceQuickViewModal'
@@ -166,6 +167,7 @@ export default function BuyerHerbsPage() {
             </Title>
           </Space>
           <Space size="large">
+            <MessageBell />
             <Button
               type="primary"
               icon={<ScanOutlined />}

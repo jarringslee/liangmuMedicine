@@ -11,6 +11,8 @@ export type StaticAccount = {
   loginUsername: string
   password: string
   roleLabel: string
+  organizationId: string
+  organizationName: string
   /** 种植商账号绑定的合作社（用于「只看自己的批次」） */
   growerId?: string
   growerName?: string
@@ -30,6 +32,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'lijialin',
     password: 'lijialin123',
     roleLabel: '管理员',
+    organizationId: 'org-liangmu-platform',
+    organizationName: '良木药谷平台',
   },
   {
     userId: 'admin-zhengwukai',
@@ -40,6 +44,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'zhengwukai',
     password: 'zhengwukai123',
     roleLabel: '管理员',
+    organizationId: 'org-liangmu-platform',
+    organizationName: '良木药谷平台',
   },
   {
     userId: 'buyer-chenjingxuan',
@@ -50,6 +56,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'chenjingxuan',
     password: 'chenjingxuan123',
     roleLabel: '采购商',
+    organizationId: 'buyer-chenjingxuan',
+    organizationName: '陈靖轩采购账户',
   },
   {
     userId: 'buyer-caomoran',
@@ -60,6 +68,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'caomoran',
     password: 'caomoran123',
     roleLabel: '采购商',
+    organizationId: 'buyer-caomoran',
+    organizationName: '曹默然采购账户',
   },
   {
     userId: 'grower-yuanyuhang',
@@ -70,6 +80,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'yuanyuhang',
     password: 'yuanyuhang123',
     roleLabel: '种植商',
+    organizationId: 'g-qinling-bencao',
+    organizationName: '秦岭本草种植合作社',
     growerId: 'g-qinling-bencao',
     growerName: '秦岭本草种植合作社',
   },
@@ -82,6 +94,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'lijiaying',
     password: 'lijiaying123',
     roleLabel: '种植商',
+    organizationId: 'g-taibaishan-daodi',
+    organizationName: '太白山道地药材基地',
     growerId: 'g-taibaishan-daodi',
     growerName: '太白山道地药材基地',
   },
@@ -94,6 +108,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'haorunyuan',
     password: 'haorunyuan123',
     roleLabel: '加工商',
+    organizationId: 'p-qinling-herb',
+    organizationName: '秦岭本草加工厂',
     processorId: 'p-qinling-herb',
     processorName: '秦岭本草加工厂',
   },
@@ -106,6 +122,8 @@ export const staticAccounts: StaticAccount[] = [
     loginUsername: 'yangzhouming',
     password: 'yangzhouming123',
     roleLabel: '加工商',
+    organizationId: 'p-baishan-herb',
+    organizationName: '白山道地药材加工厂',
     processorId: 'p-baishan-herb',
     processorName: '白山道地药材加工厂',
   },
@@ -114,10 +132,13 @@ export const staticAccounts: StaticAccount[] = [
 export function accountToSession(account: StaticAccount): AuthSession {
   return {
     userId: account.userId,
+    username: account.loginUsername,
     role: account.role,
     displayName: account.displayName,
     email: account.email,
     roleLabel: account.roleLabel,
+    organizationId: account.organizationId,
+    organizationName: account.organizationName,
     ...(account.growerId
       ? { growerId: account.growerId, growerName: account.growerName }
       : {}),
@@ -143,17 +164,4 @@ export function verifyStaticLogin(
   })
   if (!row || password !== row.password) return null
   return accountToSession(row)
-}
-
-export function getDefaultHome(role: UserRole): string {
-  switch (role) {
-    case 'buyer':
-      return '/buyer/herbs'
-    case 'grower':
-      return '/grower/dashboard'
-    case 'processor':
-      return '/processor/dashboard'
-    default:
-      return '/dashboard'
-  }
 }

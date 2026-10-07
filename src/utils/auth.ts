@@ -13,7 +13,15 @@ export function parseAuthSession(raw: string | null): AuthSession | null {
   try {
     const value = JSON.parse(raw)
     if (!value || typeof value !== 'object' || !isUserRole(value.role)) return null
-    if (![value.userId, value.displayName, value.email, value.roleLabel].every((item) => typeof item === 'string')) return null
+    if ([
+      value.userId,
+      value.username,
+      value.displayName,
+      value.email,
+      value.roleLabel,
+    ].some((item) => typeof item !== 'string')) {
+      return null
+    }
     const optionalFields = ['growerId', 'growerName', 'processorId', 'processorName', 'organizationId', 'organizationName']
     if (optionalFields.some((field) => value[field] !== undefined && typeof value[field] !== 'string')) return null
     return value as AuthSession
@@ -53,13 +61,4 @@ export function sanitizeRedirectPath(path: string | null | undefined): string | 
   const pathname = path.split(/[?#]/)[0].replace(/\/+$/, '').toLowerCase()
   if (pathname === '/login' || pathname === '') return null
   return path
-}
-
-export function getDefaultHome(role: UserRole): string {
-  switch (role) {
-    case 'buyer': return '/buyer/herbs'
-    case 'grower': return '/grower/dashboard'
-    case 'processor': return '/processor/dashboard'
-    default: return '/dashboard'
-  }
 }

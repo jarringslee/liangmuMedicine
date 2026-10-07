@@ -2,7 +2,8 @@ import { Link, Navigate, useLocation } from 'react-router-dom'
 import { Button, Result } from 'antd'
 import { useAuth } from '../hooks/useAuth'
 import type { UserRole } from '../types/auth'
-import { getDefaultHome, sanitizeRedirectPath } from '../utils/auth'
+import { sanitizeRedirectPath } from '../utils/auth'
+import { getDefaultHome } from '../utils/roleNavigation'
 
 type RequireAuthProps = {
   children: React.ReactNode

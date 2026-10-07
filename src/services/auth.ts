@@ -72,7 +72,7 @@ function toSession(value: unknown): AuthSession {
   }
   const labels = { admin: '管理员', grower: '种植商', processor: '加工商', buyer: '采购商' }
   return {
-    userId: user.id, role: user.role, displayName: user.displayName, email: user.email, roleLabel: labels[user.role],
+    userId: user.id, role: user.role, username: user.username, displayName: user.displayName, email: user.email, roleLabel: labels[user.role],
     ...(organization ? { organizationId: organization.id, organizationName: organization.name } : {}),
     ...(user.role === 'grower' && organization ? { growerId: organization.id, growerName: organization.name } : {}),
     ...(user.role === 'processor' && organization ? { processorId: organization.id, processorName: organization.name } : {}),

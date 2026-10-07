@@ -32,7 +32,6 @@ export function attachNotificationRealtime(
     try {
       const { token } = handshakeSchema.parse(socket.handshake.auth)
       const user = await auth.currentUser(await verifyAccessToken(token))
-      if (user.role !== 'admin') throw new HttpError(403, 'FORBIDDEN', '当前仅管理员可订阅通知')
       // 仅在签名、issuer、audience 和有效期验证通过后读取 exp，不能用 decode 代替验签。
       socket.data = { user, token, expiresAt: decodeJwt(token).exp! * 1000 }
       next()
@@ -56,7 +55,10 @@ export function attachNotificationRealtime(
       checking = true
       try {
         const current = await auth.currentUser(await verifyAccessToken(socket.data.token))
-        if (current.role !== 'admin' || current.organizationId !== socket.data.user.organizationId) invalidateSession()
+        if (
+          current.role !== socket.data.user.role ||
+          current.organizationId !== socket.data.user.organizationId
+        ) invalidateSession()
       } catch (error) {
         if (error instanceof HttpError && [401, 403].includes(error.status)) invalidateSession()
         else socket.conn.close() // 临时故障关闭传输层，让客户端自动重连；不误判账号永久失效。

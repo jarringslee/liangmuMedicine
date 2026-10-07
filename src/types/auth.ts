@@ -4,6 +4,8 @@ export type UserRole = 'admin' | 'grower' | 'processor' | 'buyer'
 
 export type AuthSession = {
   userId: string
+  /** 用户登录账号；来自 API username，不是内部 userId。 */
+  username: string
   role: UserRole
   displayName: string
   email: string

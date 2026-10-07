@@ -88,7 +88,7 @@ function HerbSyncBridge() {
       <Route
         path="/messages"
         element={
-          <RequireAuth allowedRoles={['admin']}>
+          <RequireAuth>
             <MessagesPage />
           </RequireAuth>
         }

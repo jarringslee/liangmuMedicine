@@ -46,6 +46,7 @@ import {
 } from '../../hooks/useHerbBatches'
 import type { AuditDecision } from '../../services/herbDataSource'
 import { filterEventsForRole } from '../../utils/herbEvents'
+import { getRoleNavigation } from '../../utils/roleNavigation'
 import TraceQrPanel from '../../components/herb/TraceQrPanel'
 import TraceTimeline from '../../components/herb/TraceTimeline'
 import TraceQuickViewModal from '../../components/herb/TraceQuickViewModal'
@@ -79,12 +80,6 @@ const ROLE_VISIBILITY: Record<UserRole, { showInternalFields: boolean; showAudit
   processor: { showInternalFields: true, showAuditActions: false, showTimeline: true },
   /** 采购商：精简字段、无审核、时间轴只在弹窗里看 */
   buyer: { showInternalFields: false, showAuditActions: false, showTimeline: false },
-}
-
-function backHomeForRole(role: UserRole): { path: string; label: string } {
-  if (role === 'buyer') return { path: '/buyer/herbs', label: '返回药材列表' }
-  if (role === 'grower') return { path: '/grower/dashboard', label: '返回种植工作台' }
-  return { path: '/admin/herbs', label: '返回药材管理' }
 }
 
 function formatOrigin(b: HerbBatch): string {
@@ -152,7 +147,7 @@ export default function TraceDetailPage() {
     }
   }, [batch, fromInternal])
 
-  const back = backHomeForRole(role)
+  const navigation = getRoleNavigation(role)
 
   const handleAudit = async (next: AuditDecision) => {
     if (!batch) return
@@ -197,10 +192,13 @@ export default function TraceDetailPage() {
               onClick={reload}
               aria-label="刷新"
             />
-            <Link to={back.path} className="trace-detail__back">
+            <Link
+              to={navigation.resourcePath}
+              className="trace-detail__back"
+            >
               <Space>
                 <ArrowLeftOutlined />
-                {back.label}
+                返回{navigation.resourceLabel}
               </Space>
             </Link>
           </Space>
@@ -213,18 +211,28 @@ export default function TraceDetailPage() {
           items={[
             {
               title: (
-                <Link to={role === 'buyer' ? '/buyer/herbs' : '/dashboard'}>
+                <Link to={navigation.homePath}>
                   <Space size={4}>
                     <HomeOutlined />
-                    {role === 'buyer' ? '采购商端' : '管理员端'}
+                    {navigation.homeLabel}
                   </Space>
                 </Link>
               ),
             },
             {
-              title: <Link to={back.path}>{role === 'buyer' ? '药材列表' : '药材管理'}</Link>,
+              title: (
+                <Link to={navigation.resourcePath}>
+                  {navigation.resourceLabel}
+                </Link>
+              ),
             },
-            { title: <span style={{ color: token.colorText }}>药材档案</span> },
+            {
+              title: (
+                <span style={{ color: token.colorText }}>
+                  药材档案
+                </span>
+              ),
+            },
           ]}
         />
 
@@ -245,8 +253,8 @@ export default function TraceDetailPage() {
               subTitle={error.message}
               extra={
                 <Space>
-                  <Button onClick={() => navigate(back.path)}>
-                    {back.label}
+                  <Button onClick={() => navigate(navigation.resourcePath)}>
+                    返回{navigation.resourceLabel}
                   </Button>
                   <Button type="primary" onClick={reload}>
                     重试
@@ -263,7 +271,9 @@ export default function TraceDetailPage() {
               subTitle={`溯源码：${traceCode ?? '—'}`}
               extra={
                 <Space>
-                  <Button onClick={() => navigate(back.path)}>{back.label}</Button>
+                  <Button onClick={() => navigate(navigation.resourcePath)}>
+                    返回{navigation.resourceLabel}
+                  </Button>
                   <Button type="primary" onClick={reload}>
                     重试
                   </Button>

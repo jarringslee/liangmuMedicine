@@ -129,17 +129,18 @@ test('通知业务失败不清登录，切换账号后丢弃旧查询/旧已读�
   assert.equal(storage.getAccessToken(), 'token-B')
 })
 
-test('通知 Hook 已读只失效本用户所有通知缓存，失败不自动重试', async () => {
+test('非管理员通知 Hook 同样启用，已读只失效本用户缓存且失败不自动重试', async () => {
   auth = await vite.ssrLoadModule('/src/services/auth.ts')
-  const user = { id: 'admin-a', username: 'admin-a', email: 'a@example.test', displayName: '管理员',
-    role: 'admin', organizationId: null, organization: null }
+  const user = { id: 'grower-a', username: 'grower-a', email: 'a@example.test', displayName: '种植商',
+    role: 'grower', organizationId: 'grower-org',
+    organization: { id: 'grower-org', name: '测试合作社', type: 'grower' } }
   globalThis.fetch = async () => new Response(JSON.stringify({ user }))
   await auth.restoreAuth()
   const { QueryClient, QueryClientProvider } = await vite.ssrLoadModule('@tanstack/react-query')
   ssrAuthFixture = true
   const { useNotifications } = await vite.ssrLoadModule('/src/hooks/useNotifications.ts')
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })
-  const ownKey = ['notifications', 'api', 'admin-a']
+  const ownKey = ['notifications', 'api', 'grower-a']
   const allKey = [...ownKey, { page: 1, pageSize: 10, status: 'all' }]
   const unreadKey = [...ownKey, { page: 1, pageSize: 5, status: 'unread' }]
   const otherKey = ['notifications', 'api', 'admin-b']

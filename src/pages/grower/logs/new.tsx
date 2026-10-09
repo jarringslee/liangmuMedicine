@@ -199,7 +199,7 @@ export default function GrowerLogNewPage() {
         />
 
         {savedTraceCode ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Result
               status="success"
               title="种植日志已保存"
@@ -229,12 +229,12 @@ export default function GrowerLogNewPage() {
             />
           </Card>
         ) : (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Alert
               type="info"
               showIcon
               style={{ marginBottom: 24 }}
-              message={`以 ${growerName ?? '我的合作社'} 名义记录种植过程`}
+              title={`以 ${growerName ?? '我的合作社'} 名义记录种植过程`}
               description="仅「种植中」且未驳回的批次可写日志。日志会追加到该批次的溯源时间线。"
             />
 

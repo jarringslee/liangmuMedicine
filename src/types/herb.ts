@@ -121,6 +121,13 @@ export type HerbBatch = {
   growerId: string
   growerName: string
 
+  /** 收货采购组织；旧样例和无权查看收货方时可能没有。 */
+  buyerId?: string
+  buyerName?: string
+
+  /** API 由服务端派生，demo 按当前身份推导；仅用于控制界面。 */
+  canConfirmReceipt?: boolean
+
   /** 种植开始日期 YYYY-MM-DD */
   plantingStartDate: string
   origin: HerbOrigin
@@ -142,4 +149,15 @@ export type HerbBatch = {
 
   /** 链路事件，时间正序（早→晚），UI 可反向展示 */
   events: BatchEvent[]
+}
+
+/** 出库选择框只需要组织 ID 和名称。 */
+export type DispatchRecipient = {
+  id: string
+  name: string
+}
+
+/** 管理员选择的是目标组织，不是伪造当前账号身份。 */
+export type DispatchBatchInput = {
+  buyerOrganizationId: string
 }

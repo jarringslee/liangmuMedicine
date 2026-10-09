@@ -457,7 +457,7 @@ export default function ProcessorBatchesPage() {
 
         <BatchQueryError error={error} onRetry={reload} />
 
-        <Card bordered={false}>
+        <Card variant="borderless">
           <div className="herb-admin__toolbar">
             <Input.Search
               allowClear
@@ -510,7 +510,7 @@ export default function ProcessorBatchesPage() {
         onOk={handleCompleteProcessing}
         onCancel={closeCompleteModal}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Text type="secondary">
             {completingBatch
               ? `批次：${completingBatch.batchNo} · ${completingBatch.herbName}`
@@ -536,7 +536,7 @@ export default function ProcessorBatchesPage() {
         onCancel={closeQcModal}
       >
 
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Text type="secondary">
             {qcBatch ? `批次：${qcBatch.batchNo} · ${qcBatch.herbName}` : null}
           </Text>

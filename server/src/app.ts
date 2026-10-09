@@ -26,6 +26,10 @@ import { createAssistantService, type AssistantService } from './services/assist
 import { createAssistantConversationService, type AssistantConversationService } from './services/assistantConversation.js'
 import { createDashboardRouter } from './routes/dashboard.js'
 import { createDashboardService, type DashboardService } from './services/dashboard.js'
+import { createChatService, type ChatService } from './services/chat.js'
+import { createChatRouter } from './routes/chat.js'
+import { createPublicTraceRouter } from './routes/publicTrace.js'
+import { createPublicTraceService, type PublicTraceService } from './services/publicTrace.js'
 // 批次业务服务工厂与类型定义
 import {
   createBatchService,
@@ -47,6 +51,8 @@ export function createApp(
   assistantService: AssistantService = createAssistantService(),
   assistantConversationService: AssistantConversationService = createAssistantConversationService({ batches: batchService, auth: authService }),
   dashboardService: DashboardService = createDashboardService(),
+  chatService: ChatService = createChatService(),
+  publicTraceService: PublicTraceService = createPublicTraceService(),
 ) {
   // 初始化express app实例
   const app = express()
@@ -66,7 +72,9 @@ export function createApp(
   app.use('/api', healthRouter)
   // 挂载鉴权相关接口 /api/auth，注入认证服务
   app.use('/api/auth', createAuthRouter(authService))
+  app.use('/api/public/trace', createPublicTraceRouter(publicTraceService))
   app.use('/api/notifications', createNotificationRouter(authService, notificationService))
+  app.use('/api/chat', createChatRouter(authService, chatService))
   app.use('/api/assistant', createAssistantRouter(authService, assistantService, assistantConversationService))
   app.use('/api/dashboard', createDashboardRouter(authService, dashboardService))
   app.use('/api/batches', createRiskAnalysisRouter(authService, riskAnalysisService))

@@ -237,14 +237,14 @@ export default function TraceDetailPage() {
         />
 
         {loading ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Flex justify="center" style={{ padding: 48 }}>
               <Spin />
             </Flex>
           </Card>
         ) : error ? (
           <Card
-            bordered={false}
+            variant="borderless"
             className="trace-detail__not-found"
           >
             <Result
@@ -264,7 +264,7 @@ export default function TraceDetailPage() {
             />
           </Card>
         ) : !batch ? (
-          <Card bordered={false} className="trace-detail__not-found">
+          <Card variant="borderless" className="trace-detail__not-found">
             <Result
               status="404"
               title="未找到该溯源批次"
@@ -333,10 +333,10 @@ function BatchView({
   const attachments = useMemo(() => collectAttachments(batch, role), [batch, role])
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {buyerOnlyTip ? <Alert type="warning" showIcon message={buyerOnlyTip} /> : null}
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+      {buyerOnlyTip ? <Alert type="warning" showIcon title={buyerOnlyTip} /> : null}
 
-      <Card bordered={false} className="trace-detail__hero">
+      <Card variant="borderless" className="trace-detail__hero">
         <div className="trace-detail__hero-grid">
           <div
             className="trace-detail__cover"
@@ -431,7 +431,7 @@ function BatchView({
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={16}>
-          <Card title="基础信息" bordered={false}>
+          <Card title="基础信息" variant="borderless">
             <Descriptions column={{ xs: 1, sm: 2 }} size="middle">
               <Descriptions.Item label="药材名称">{batch.herbName}</Descriptions.Item>
               <Descriptions.Item label="类别">{HERB_CATEGORY_LABEL[batch.category]}</Descriptions.Item>
@@ -470,7 +470,7 @@ function BatchView({
                 <span>环境与产地</span>
               </Space>
             }
-            bordered={false}
+            variant="borderless"
             className="trace-detail__env-card"
             style={{ marginTop: 16 }}
           >
@@ -508,7 +508,7 @@ function BatchView({
                 </Text>
               </Space>
             }
-            bordered={false}
+            variant="borderless"
             style={{ marginTop: 16 }}
           >
             {attachments.length === 0 ? (
@@ -526,7 +526,7 @@ function BatchView({
                       <div className="trace-detail__attach-body">
                         <div className="trace-detail__attach-name">{a.name}</div>
                         <div className="trace-detail__attach-meta">
-                          <Tag bordered={false}>{EVENT_TYPE_LABEL[a.eventType]}</Tag>
+                          <Tag variant="filled">{EVENT_TYPE_LABEL[a.eventType]}</Tag>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {a.eventTitle} · {a.occurredAt}
                           </Text>
@@ -575,7 +575,7 @@ function BatchView({
                   </Text>
                 </Space>
               }
-              bordered={false}
+              variant="borderless"
               className="trace-detail__timeline-card"
               style={{ marginTop: 16 }}
             >
@@ -585,21 +585,22 @@ function BatchView({
         </Col>
 
         <Col xs={24} xl={8}>
-          <Card title="溯源二维码与分享" bordered={false} className="trace-detail__qr-card">
+          <Card title="溯源二维码与分享" variant="borderless" className="trace-detail__qr-card">
             <TraceQrPanel traceCode={batch.traceCode} size={232} />
             <Paragraph
               type="secondary"
               style={{ marginTop: 16, marginBottom: 0, fontSize: 12, wordBreak: 'break-all' }}
             >
-              链接：{buildTraceUrl(batch.traceCode)}
+              公开链接：{buildTraceUrl(batch.traceCode)}
             </Paragraph>
             <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-              扫码可直接打开本档案；可下载二维码用于打印贴标。
+              扫码或访问链接可查看已审核批次的公开档案；
+              完整详情与 AI 仍需登录并通过权限检查。
             </Paragraph>
           </Card>
 
-          <Card title="当前状态与风险" bordered={false} style={{ marginTop: 16 }}>
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Card title="当前状态与风险" variant="borderless" style={{ marginTop: 16 }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               <Flex justify="space-between" align="center">
                 <Text type="secondary">流转阶段</Text>
                 <StageTag stage={batch.stage} />
@@ -616,7 +617,7 @@ function BatchView({
                 <Alert
                   showIcon
                   type={batch.riskLevel === 'high' ? 'error' : 'warning'}
-                  message={
+                  title={
                     batch.riskLevel === 'high'
                       ? '该批次目前为高风险状态，建议核查后续节点。'
                       : '该批次存在一定风险因素，请关注后续质检与流转。'

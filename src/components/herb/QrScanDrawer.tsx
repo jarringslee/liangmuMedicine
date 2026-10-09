@@ -73,8 +73,8 @@ export default function QrScanDrawer({ open, onClose, onResult }: Props) {
       placement="right"
       open={open}
       onClose={handleClose}
-      destroyOnClose
-      width={520}
+      destroyOnHidden
+      size={520}
     >
       <Tabs
         activeKey={active}
@@ -253,7 +253,7 @@ function LiveScanTab({ active, onHit }: { active: boolean; onHit: (raw: string) 
     window.location.hostname !== '127.0.0.1'
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Paragraph type="secondary" style={{ marginBottom: 0 }}>
         将摄像头对准溯源二维码，识别成功后会自动跳转到详情页。
       </Paragraph>
@@ -262,7 +262,7 @@ function LiveScanTab({ active, onHit }: { active: boolean; onHit: (raw: string) 
         <Alert
           type="warning"
           showIcon
-          message="当前页面非 HTTPS / localhost，浏览器可能拒绝摄像头权限"
+          title="当前页面非 HTTPS / localhost，浏览器可能拒绝摄像头权限"
           description="如需在手机或局域网设备上扫码，请使用 HTTPS 部署，或改用「图片识别 / 手动输入」。"
         />
       ) : null}
@@ -312,7 +312,7 @@ function LiveScanTab({ active, onHit }: { active: boolean; onHit: (raw: string) 
         )}
       </Flex>
 
-      {status === 'error' ? <Alert type="error" showIcon message={errMsg || '摄像头启动失败'} /> : null}
+      {status === 'error' ? <Alert type="error" showIcon title={errMsg || '摄像头启动失败'} /> : null}
     </Space>
   )
 }
@@ -374,7 +374,7 @@ function ImageScanTab({ onHit }: { onHit: (raw: string) => void }) {
   )
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Paragraph type="secondary" style={{ marginBottom: 0 }}>
         上传一张包含溯源二维码的图片（截图或拍照），系统将自动识别并跳转到详情页。
       </Paragraph>
@@ -409,9 +409,9 @@ function ImageScanTab({ onHit }: { onHit: (raw: string) => void }) {
               background: '#f6f7f5',
             }}
           />
-          <Space direction="vertical" size={4} style={{ flex: 1, minWidth: 0 }}>
+          <Space orientation="vertical" size={4} style={{ flex: 1, minWidth: 0 }}>
             {loading ? <Tag color="processing">识别中…</Tag> : null}
-            {errMsg ? <Alert type="error" showIcon message={errMsg} /> : null}
+            {errMsg ? <Alert type="error" showIcon title={errMsg} /> : null}
           </Space>
         </Flex>
       ) : null}
@@ -444,7 +444,7 @@ function ManualInputTab({ onHit }: { onHit: (raw: string) => void }) {
   }
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Paragraph type="secondary" style={{ marginBottom: 0 }}>
         若你已知溯源码（或拥有完整链接），可直接输入查询。
       </Paragraph>

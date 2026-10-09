@@ -33,8 +33,12 @@ function cancelAuthWork() {
   clearTimeout(expiryTimer)
 }
 function clearUserCache() {
-  void queryClient.cancelQueries()
-  queryClient.clear()
+  // 公开查询不依赖账号；过期/切账号时不能误取消正在读取的匿名档案。
+  // 只豁免独立的 public-trace key，其他查询和所有提交缓存仍清空。
+  const privateQueries = { predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== 'public-trace' }
+  void queryClient.cancelQueries(privateQueries)
+  queryClient.removeQueries(privateQueries)
+  queryClient.getMutationCache().clear()
 }
 
 export function logout(message: string | null = null) {

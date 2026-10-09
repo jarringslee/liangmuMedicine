@@ -273,7 +273,7 @@ export default function GrowerHarvestListPage() {
           </div>
         </div>
 
-        <Card bordered={false}>
+        <Card variant="borderless">
           <div className="herb-admin__toolbar">
             <Input.Search
               allowClear

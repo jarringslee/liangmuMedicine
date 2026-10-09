@@ -204,7 +204,7 @@ export default function GrowerHarvestNewPage() {
         />
 
         {savedTraceCode ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Result
               status="success"
               title="采收登记已完成"
@@ -234,12 +234,12 @@ export default function GrowerHarvestNewPage() {
             />
           </Card>
         ) : (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Alert
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`以 ${growerName ?? '我的合作社'} 名义进行采收登记`}
+              title={`以 ${growerName ?? '我的合作社'} 名义进行采收登记`}
               description={`仅「种植中」且未驳回的批次可采收。提交后批次阶段将自动流转到「${STAGE_LABEL.harvested}」，并写入溯源时间轴。`}
             />
 

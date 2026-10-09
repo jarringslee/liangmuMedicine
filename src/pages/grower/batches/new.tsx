@@ -173,7 +173,7 @@ export default function GrowerBatchNewPage() {
         />
 
         {createdBatch ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Result
               status="success"
               title="批次已提交，等待管理员审核"
@@ -243,12 +243,12 @@ export default function GrowerBatchNewPage() {
             </Row>
           </Card>
         ) : (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Alert
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`当前以「${growerName ?? '未绑定合作社'}」名义建档`}
+              title={`当前以「${growerName ?? '未绑定合作社'}」名义建档`}
               description="提交后批次状态为「待审核」，进入管理员审核队列；通过后才会对采购商可见。"
             />
 
@@ -341,7 +341,7 @@ export default function GrowerBatchNewPage() {
 
                 <Col xs={24}>
                   <Form.Item label="封面图（演示环境本地暂存）" className="herb-form__upload">
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                       <Upload
                         accept="image/*"
                         fileList={fileList}

@@ -102,10 +102,10 @@ function EventCard({ event }: { event: BatchEvent }) {
   return (
     <div>
       <div className="trace-timeline__event-title">
-        <Tag bordered={false}>{EVENT_TYPE_LABEL[event.type]}</Tag>
+        <Tag variant="filled">{EVENT_TYPE_LABEL[event.type]}</Tag>
         <span>{event.title}</span>
         {event.fromStage && event.toStage ? (
-          <Tag color="purple" bordered={false}>
+          <Tag color="purple" variant="filled">
             {STAGE_LABEL[event.fromStage]} → {STAGE_LABEL[event.toStage]}
           </Tag>
         ) : null}

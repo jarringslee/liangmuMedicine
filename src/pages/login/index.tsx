@@ -49,7 +49,7 @@ export default function LoginPage() {
       </section>
 
       <aside className="login-page__right" aria-label="登录">
-        <Card className="login-page__card" bordered={false}>
+        <Card className="login-page__card" variant="borderless">
           <LoginForm />
         </Card>
       </aside>

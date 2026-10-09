@@ -23,7 +23,7 @@ const { signAccessToken } = await import('../src/lib/token.js')
 
 const user: AuthUser = { id: 'buyer', role: 'buyer', username: 'buyer', email: 'buyer@example.test',
   displayName: '采购商', organizationId: null, organization: null }
-function fixture(id = 'A', herbName = '甘草'): BatchDetailRecord {
+function fixture(id = 'A', herbName = '甘草'): BatchDetailRecord & { canConfirmReceipt: boolean } {
   const now = new Date('2026-10-06T00:00:00Z')
   return { id, herbName, batchNo: `YM-${id}`, traceCode: `YM-TRACE-${id}`, category: 'root',
     plantingStartDate: now, origin: { province: '陕西省', city: '西安市' }, environment: null,
@@ -31,7 +31,7 @@ function fixture(id = 'A', herbName = '甘草'): BatchDetailRecord {
     auditStatus: 'approved', riskLevel: 'normal', version: 1, createdAt: now, updatedAt: now,
     createdBy: { id: 'grower', displayName: '种植商', role: 'grower' },
     growerOrganization: { id: 'grower-org', name: '测试组织', code: 'TEST', type: 'grower', province: null, city: null },
-    processorOrganization: null, attachments: [], audits: [], events: [] }
+    processorOrganization: null, buyerOrganization: null, canConfirmReceipt: false, attachments: [], audits: [], events: [] }
 }
 function memoryStore() {
   const users = new Map<string, StoredAssistantTurn[]>()

@@ -14,6 +14,7 @@ import type {
     BatchService,
     CompleteProcessingInput,
     CreateBatchInput,
+    DispatchBatchInput,
     HarvestBatchInput,
     ProcessingQualityReportInput,
 } from '../services/batches.js'
@@ -146,6 +147,12 @@ const processingQualityReportSchema = z.object({
     summary: z.string().trim().min(1).max(500),
 }).strict()
 
+const dispatchBatchSchema = z.object({
+    buyerOrganizationId: z.string().trim().min(1).max(100),
+}).strict()
+
+const emptyBodySchema = z.object({}).strict()
+
 /**
 * 创建批次模块路由工厂函数
 * 接收认证服务、批次业务服务实例，返回配置好的express路由对象
@@ -167,6 +174,12 @@ export function createBatchRouter(
     // 当前路由下面所有接口，请求进来必须先校验AccessToken，解析登录用户信息
     // 未登录、token无效直接拦截，不会进入下面接口业务代码
     router.use(authenticate(authService))
+
+    // 固定路径必须在 /:identifier 前注册，避免被当成批次编号。
+    router.get('/dispatch-recipients', requireRoles('admin'), async (req, res) => {
+        z.object({}).strict().parse(req.query)
+        res.json(await batchService.dispatchRecipients(req.auth!))
+    })
 
     // POST / 创建批次：组织、创建人和初始状态全部由服务端认证身份生成。
     router.post('/', requireRoles('grower'), async (req, res) => {
@@ -321,9 +334,11 @@ export function createBatchRouter(
         requireRoles('admin'),
         async (req, res) => {
             const identifier = identifierSchema.parse(req.params.identifier)
+            const input = dispatchBatchSchema.parse(req.body) as DispatchBatchInput
             const batch = await batchService.dispatch(
                 req.auth!,
                 identifier,
+                input,
             )
             res.json({ batch })
         },
@@ -334,6 +349,8 @@ export function createBatchRouter(
         requireRoles('buyer'),
         async (req, res) => {
             const identifier = identifierSchema.parse(req.params.identifier)
+            // 收货组织/操作人由认证身份派生，拒绝客户端伪造。
+            emptyBodySchema.parse(req.body ?? {})
             const batch = await batchService.confirmReceipt(
                 req.auth!,
                 identifier,

@@ -29,7 +29,7 @@ const result = {
   missingInformation: [], evidence: [{ sourceId: 'batch:identity', note: '批次建档资料已读取' }],
 }
 
-function fixture(): BatchDetailRecord {
+function fixture(): BatchDetailRecord & { canConfirmReceipt: boolean } {
   const now = new Date('2026-10-04T06:00:00Z')
   return {
     id: 'batch-test', batchNo: 'YM-TEST', traceCode: 'YM-TRACE-TEST',
@@ -42,6 +42,8 @@ function fixture(): BatchDetailRecord {
       id: 'grower-org', code: 'GROWER', name: '种植组织', type: 'grower', province: '陕西省', city: '西安市',
     },
     processorOrganization: null,
+    buyerOrganization: null,
+    canConfirmReceipt: false,
     createdBy: { id: 'grower', displayName: '种植商', role: 'grower' },
     events: [{
       id: 'create-event', type: 'create', title: '批次建档', description: '基础信息',

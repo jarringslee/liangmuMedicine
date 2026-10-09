@@ -166,7 +166,7 @@ export default function ProcessorDashboardPage() {
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="待接收"
                 value={stats.pendingReceive}
@@ -175,7 +175,7 @@ export default function ProcessorDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="加工中"
                 value={stats.processing}
@@ -184,7 +184,7 @@ export default function ProcessorDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="已入库"
                 value={stats.warehousing}
@@ -193,7 +193,7 @@ export default function ProcessorDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="可处理批次"
                 value={stats.total}
@@ -205,7 +205,7 @@ export default function ProcessorDashboardPage() {
 
         <Card
           title="最近可处理批次"
-          bordered={false}
+          variant="borderless"
           style={{ marginTop: 16 }}
           extra={
             <Button type="link" onClick={() => navigate('/processor/batches')}>

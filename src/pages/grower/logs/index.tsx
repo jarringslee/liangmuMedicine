@@ -172,7 +172,7 @@ export default function GrowerLogsPage() {
 
         <BatchQueryError error={error} onRetry={reload} />
 
-        <Card bordered={false}>
+        <Card variant="borderless">
           <div className="herb-admin__toolbar">
             <Input.Search
               allowClear
@@ -217,7 +217,7 @@ export default function GrowerLogsPage() {
           />
         </Card>
 
-        <Card bordered={false} style={{ marginTop: 16 }} size="small">
+        <Card variant="borderless" style={{ marginTop: 16 }} size="small">
           <Space>
             <MedicineBoxOutlined style={{ color: token.colorPrimary }} />
             <Text type="secondary">

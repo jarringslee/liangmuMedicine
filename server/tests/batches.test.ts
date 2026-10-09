@@ -92,6 +92,7 @@ function detailFixture(input: {
     processorOrganization: input.processorId
       ? organization(input.processorId, 'processor')
       : null,
+    buyerOrganization: null,
     createdBy: {
       id: 'creator',
       displayName: '创建人',
@@ -193,6 +194,7 @@ function matches(batch: BatchDetailRecord, where: Prisma.HerbBatchWhereInput): b
     riskLevel: batch.riskLevel,
     growerOrganizationId: batch.growerOrganization.id,
     processorOrganizationId: batch.processorOrganization?.id ?? null,
+    buyerOrganizationId: batch.buyerOrganization?.id ?? null,
   }
 
   return Object.entries(input).every(([key, condition]) => {
@@ -202,6 +204,7 @@ function matches(batch: BatchDetailRecord, where: Prisma.HerbBatchWhereInput): b
 }
 
 const batchRepository: BatchRepository = {
+  listDispatchRecipients: async () => [{ id: 'org-buyer', name: 'buyer 组织' }],
   count: async (where) => batches.filter((batch) => matches(batch, where)).length,
   list: async ({ where, skip, take }) => batches
     .filter((batch) => matches(batch, where))
@@ -465,16 +468,21 @@ const batchRepository: BatchRepository = {
     return batch
   },
   dispatch: async (input) => {
+    if (input.buyerOrganizationId !== 'org-buyer') {
+      const { HttpError } = await import('../src/middleware/error.js')
+      throw new HttpError(400, 'INVALID_DISPATCH_RECIPIENT', '请选择有效的采购组织')
+    }
     const batch = batches.find((item) => item.id === input.batchId)
     if (
       !batch ||
       batch.version !== input.expectedVersion ||
       batch.stage !== 'warehousing' ||
-      batch.auditStatus !== 'approved'
+      batch.auditStatus !== 'approved' || batch.buyerOrganization !== null
     ) return null
 
     const changedAt = new Date('2026-09-28T06:00:00.000Z')
     batch.stage = 'shipped'
+    batch.buyerOrganization = { id: input.buyerOrganizationId, name: 'buyer 组织' }
     batch.version += 1
     batch.updatedAt = changedAt
     batch.events.push({
@@ -500,7 +508,7 @@ const batchRepository: BatchRepository = {
       !batch ||
       batch.version !== input.expectedVersion ||
       batch.stage !== 'shipped' ||
-      batch.auditStatus !== 'approved'
+      batch.auditStatus !== 'approved' || batch.buyerOrganization?.id !== input.buyerOrganizationId
     ) return null
 
     const changedAt = new Date('2026-09-28T07:00:00.000Z')
@@ -546,17 +554,18 @@ after(async () => {
   await prisma.$disconnect()
 })
 
-async function tokenFor(role: typeof roles[number]) {
+async function tokenFor(account: string) {
+  const role = users.get(account)!.role
   const response = await fetch(`${api.base}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ account: role, password, role }),
+    body: JSON.stringify({ account, password, role }),
   })
   assert.equal(response.status, 200)
   return (await response.json()).accessToken as string
 }
 
-async function get(path: string, role?: typeof roles[number]) {
+async function get(path: string, role?: string) {
   const token = role ? await tokenFor(role) : null
   return fetch(`${api.base}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -565,7 +574,7 @@ async function get(path: string, role?: typeof roles[number]) {
 
 async function send(
   path: string,
-  role: typeof roles[number],
+  role: string,
   method: 'POST' | 'PATCH',
   body: unknown,
 ) {
@@ -907,11 +916,12 @@ test('只有管理员可以将仓储批次确认出库', async () => {
     '/api/batches/two/shipping/dispatch',
     'admin',
     'POST',
-    {},
+    { buyerOrganizationId: 'org-buyer' },
   )
   assert.equal(response.status, 200)
   const batch = (await response.json()).batch
   assert.equal(batch.stage, 'shipped')
+  assert.deepEqual(batch.buyerOrganization, { id: 'org-buyer', name: 'buyer 组织' })
   assert.equal(batch.events.at(-1).operatorRole, 'admin')
   assert.equal(batch.events.at(-1).fromStage, 'warehousing')
   assert.equal(batch.events.at(-1).toStage, 'shipped')
@@ -920,7 +930,7 @@ test('只有管理员可以将仓储批次确认出库', async () => {
     '/api/batches/two/shipping/dispatch',
     'admin',
     'POST',
-    {},
+    { buyerOrganizationId: 'org-buyer' },
   )
   assert.equal(repeated.status, 409)
   assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
@@ -956,4 +966,63 @@ test('只有采购商可以确认已出库批次收货', async () => {
   )
   assert.equal(repeated.status, 409)
   assert.equal((await repeated.json()).error.code, 'INVALID_BATCH_STAGE')
+})
+
+test('出库采购组织仅管理员可查询，无额外参数，返回最小字段', async () => {
+  assert.equal((await get('/api/batches/dispatch-recipients')).status, 401)
+  for (const role of ['buyer', 'grower', 'processor']) {
+    assert.equal((await get('/api/batches/dispatch-recipients', role)).status, 403)
+  }
+  const response = await get('/api/batches/dispatch-recipients', 'admin')
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.deepEqual(await response.json(), { items: [{ id: 'org-buyer', name: 'buyer 组织' }] })
+  assert.equal((await get('/api/batches/dispatch-recipients?organizationId=other', 'admin')).status, 400)
+})
+
+test('出库必填合法收货组织，拒绝身份/状态字段注入，不改变批次或事件', async () => {
+  const batch = detailFixture({ id: 'dispatch-validation', herbName: '黄芪', auditStatus: 'approved',
+    stage: 'warehousing', growerId: 'org-grower', processorId: null })
+  batches.push(batch)
+  for (const body of [{}, { buyerOrganizationId: '' }, { buyerOrganizationId: 'not-eligible' },
+    { buyerOrganizationId: 'org-buyer', operatorId: 'fake-user' },
+    { buyerOrganizationId: 'org-buyer', stage: 'sold' }]) {
+    assert.equal((await send(`/api/batches/${batch.id}/shipping/dispatch`, 'admin', 'POST', body)).status, 400)
+    assert.equal(batch.stage, 'warehousing'); assert.equal(batch.version, 1)
+    assert.equal(batch.events.length, 2); assert.equal(batch.buyerOrganization, null)
+  }
+})
+
+test('他组织与历史未分配收货统一 404，浏览权限保留但收货方身份隐藏', async () => {
+  const owner = users.get('buyer')!
+  users.set('buyer-other', { ...owner, id: 'buyer-other', username: 'buyer-other',
+    email: 'other@example.com', organizationId: 'org-other-buyer',
+    organization: { ...owner.organization!, id: 'org-other-buyer' } })
+  const batch = detailFixture({ id: 'receipt-scope', herbName: '黄芪', auditStatus: 'approved',
+    stage: 'shipped', growerId: 'org-grower', processorId: null })
+  batch.buyerOrganization = { id: 'org-buyer', name: 'buyer 组织' }
+  batches.push(batch)
+  const own = await (await get(`/api/batches/${batch.id}`, 'buyer')).json()
+  assert.equal(own.batch.canConfirmReceipt, true)
+  const other = await (await get(`/api/batches/${batch.id}`, 'buyer-other')).json()
+  assert.equal(other.batch.canConfirmReceipt, false); assert.equal(other.batch.buyerOrganization, null)
+  const listed = await (await get('/api/batches?pageSize=100', 'buyer-other')).json()
+  assert.equal(listed.items.find((item: { id: string }) => item.id === batch.id).buyerOrganization, null)
+  assert.equal((await send(`/api/batches/${batch.id}/receipt/confirm`, 'buyer-other', 'POST', {})).status, 404)
+  assert.equal((await send('/api/batches/unknown/receipt/confirm', 'buyer-other', 'POST', {})).status, 404)
+  assert.equal(batch.stage, 'shipped'); assert.equal(batch.version, 1)
+  batch.buyerOrganization = null
+  assert.equal((await send(`/api/batches/${batch.id}/receipt/confirm`, 'buyer', 'POST', {})).status, 404)
+})
+
+test('收货拒绝伪造组织；归属合法但版本竞争只返回 409，不生成第二条事件', async () => {
+  const batch = batches.find((item) => item.id === 'receipt-scope')!
+  batch.buyerOrganization = { id: 'org-buyer', name: 'buyer 组织' }
+  assert.equal((await send(`/api/batches/${batch.id}/receipt/confirm`, 'buyer', 'POST',
+    { buyerOrganizationId: 'org-buyer' })).status, 400)
+  const conflictService = createBatchService({ ...batchRepository, confirmReceipt: async () => null })
+  const user = await authService.currentUser('buyer')
+  await assert.rejects(conflictService.confirmReceipt(user, batch.id), { status: 409, code: 'BATCH_STATE_CHANGED' })
+  assert.equal(batch.stage, 'shipped'); assert.equal(batch.version, 1)
+  assert.equal(batch.events.length, 2)
 })

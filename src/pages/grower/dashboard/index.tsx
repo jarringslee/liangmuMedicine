@@ -179,7 +179,7 @@ export default function GrowerDashboardPage() {
 
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="我的批次"
                 value={stats.total}
@@ -188,7 +188,7 @@ export default function GrowerDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="待审核"
                 value={stats.pending}
@@ -197,7 +197,7 @@ export default function GrowerDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="已通过"
                 value={stats.approved}
@@ -206,7 +206,7 @@ export default function GrowerDashboardPage() {
             </Card>
           </Col>
           <Col xs={12} md={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="已驳回"
                 value={stats.rejected}
@@ -218,7 +218,7 @@ export default function GrowerDashboardPage() {
 
         <Card
           title="最近批次"
-          bordered={false}
+          variant="borderless"
           style={{ marginTop: 16 }}
           extra={
             <Button type="link" onClick={() => navigate('/grower/batches')}>

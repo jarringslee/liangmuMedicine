@@ -7,10 +7,12 @@ import { verifyAccessToken } from '../lib/token.js'
 import { HttpError } from '../middleware/error.js'
 import type { AuthService, AuthUser } from '../services/auth.js'
 import { notificationChanges, type NotificationChanges } from '../services/notificationChanges.js'
+import { chatChanges } from '../services/chatChanges.js'
 
 const handshakeSchema = z.object({ token: z.string().min(1).max(4096) }).strict()
 type ServerEvents = {
   'notifications:changed': () => void
+  'chat:changed': () => void
   'session:invalid': (error: { code: string; message: string }) => void
 }
 type SocketData = { user: AuthUser; token: string; expiresAt: number }
@@ -22,6 +24,7 @@ export function attachNotificationRealtime(
   auth: AuthService,
   changes: NotificationChanges = notificationChanges,
   recheckMs = 30_000,
+  humanChatChanges: NotificationChanges = chatChanges,
 ) {
   const io = new Server<Record<string, never>, ServerEvents, Record<string, never>, SocketData>(server, {
     cors: { origin: env.CLIENT_ORIGIN }, maxHttpBufferSize: 16_384,
@@ -72,5 +75,9 @@ export function attachNotificationRealtime(
     for (const id of ids) io.to(room(id)).emit('notifications:changed')
   })
   server.once('close', unsubscribe)
+  const unsubscribeChat = humanChatChanges.subscribe((ids) => {
+    for (const id of ids) io.to(room(id)).emit('chat:changed')
+  })
+  server.once('close', unsubscribeChat)
   return io
 }

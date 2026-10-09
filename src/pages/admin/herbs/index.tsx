@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Breadcrumb,
   Button,
@@ -15,6 +15,7 @@ import {
   Typography,
   message,
   theme,
+  Alert,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -54,6 +55,8 @@ import { useAuth } from '../../../hooks/useAuth'
 
 import RiskAnalysisDrawer from '../../../components/herb/RiskAnalysisDrawer'
 
+import { useDispatchRecipients } from '../../../hooks/useDispatchRecipients'
+
 const { Header, Content } = Layout
 const { Text, Title } = Typography
 
@@ -91,6 +94,47 @@ export default function AdminHerbsPage() {
   // 只保存选中 ID，批次内容始终从最新查询结果取得。
   const riskBatch =
     data.find((batch) => batch.id === riskBatchId) ?? null
+
+  const [dispatchBatchId, setDispatchBatchId] =
+    useState<string | null>(null)
+
+  const [buyerOrganizationId, setBuyerOrganizationId] =
+    useState<string | undefined>(undefined)
+
+  // 同步防重入锁，不承担页面 loading 状态。
+  const dispatchLock = useRef(false)
+
+  // 只保存 ID，不再保存一份可能过期的批次对象。
+  const dispatchBatch =
+    data.find((batch) => batch.id === dispatchBatchId) ?? null
+
+  const recipientsQuery =
+    useDispatchRecipients(dispatchBatchId !== null)
+
+  const recipients = recipientsQuery.data ?? []
+
+  const selectedRecipient = recipients.find(
+    (recipient) => recipient.id === buyerOrganizationId,
+  )
+
+  const recipientsReady =
+    recipientsQuery.isSuccess &&
+    !recipientsQuery.isFetching &&
+    !recipientsQuery.isPaused
+
+  const batchCanDispatch =
+    dispatchBatch !== null &&
+    dispatchBatch.stage === 'warehousing' &&
+    dispatchBatch.auditStatus === 'approved' &&
+    !dispatchBatch.buyerId
+
+  const canDispatch =
+    session?.role === 'admin' &&
+    batchCanDispatch &&
+    selectedRecipient !== undefined &&
+    recipientsReady &&
+    !loading &&
+    !error
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -139,26 +183,62 @@ export default function AdminHerbsPage() {
     })
   }
 
-  const handleDispatch = async (row: HerbBatch) => {
-    try {
-      await dispatch.mutateAsync({
-        batchId: row.id,
-        operatorName: session?.displayName ?? '管理员',
-      })
-      message.success('已确认出库，批次进入运输中')
-    } catch (e) {
-      message.error(`出库失败：${(e as Error).message}`)
+  const confirmDispatch = (row: HerbBatch) => {
+    if (dispatchLock.current || dispatch.isPending) return
+
+    if (
+      loading ||
+      error ||
+      row.stage !== 'warehousing' ||
+      row.auditStatus !== 'approved' ||
+      row.buyerId
+    ) {
+      message.warning('仅审核通过且未分配的仓储批次可以出库')
+      return
     }
+
+    // 每次打开都重新选择，不默认分配第一个采购组织。
+    setBuyerOrganizationId(undefined)
+    setDispatchBatchId(row.id)
   }
 
-  const confirmDispatch = (row: HerbBatch) => {
-    Modal.confirm({
-      title: '确认该批次出库？',
-      content: `批次：${row.batchNo} · ${row.herbName}`,
-      okText: '确认出库',
-      cancelText: '取消',
-      onOk: () => handleDispatch(row),
-    })
+  const closeDispatch = () => {
+    if (dispatchLock.current || dispatch.isPending) return
+
+    setDispatchBatchId(null)
+    setBuyerOrganizationId(undefined)
+  }
+
+  const handleDispatch = async () => {
+    if (dispatchLock.current || dispatch.isPending) return
+
+    if (!dispatchBatch || !selectedRecipient || !canDispatch) {
+      message.warning('请等待数据加载完成，并选择有效的采购组织')
+      return
+    }
+
+    dispatchLock.current = true
+
+    try {
+      await dispatch.mutateAsync({
+        batchId: dispatchBatch.id,
+        input: {
+          buyerOrganizationId: selectedRecipient.id,
+        },
+      })
+
+      message.success(`已出库至「${selectedRecipient.name}」`)
+      setDispatchBatchId(null)
+      setBuyerOrganizationId(undefined)
+    } catch (error) {
+      message.error(`出库失败：${(error as Error).message}`)
+
+      // 更新查询信息，不自动重试出库写操作。
+      reload()
+      void recipientsQuery.refetch()
+    } finally {
+      dispatchLock.current = false
+    }
   }
 
   const columns: ColumnsType<HerbBatch> = [
@@ -265,7 +345,13 @@ export default function AdminHerbsPage() {
                 dispatch.isPending &&
                 dispatch.variables?.batchId === row.id
               }
-              disabled={row.auditStatus !== 'approved'}
+              disabled={
+                row.auditStatus !== 'approved' ||
+                !!row.buyerId ||
+                dispatch.isPending ||
+                loading ||
+                !!error
+              }
               onClick={() => confirmDispatch(row)}
             >
               确认出库
@@ -339,7 +425,7 @@ export default function AdminHerbsPage() {
 
         <BatchQueryError error={error} onRetry={reload} />
 
-        <Card bordered={false}>
+        <Card variant="borderless">
           <div className="herb-admin__toolbar">
             <Input.Search
               allowClear
@@ -390,6 +476,105 @@ export default function AdminHerbsPage() {
           />
         </Card>
       </Content>
+      <Modal
+        title="选择收货采购组织"
+        open={dispatchBatchId !== null}
+        onOk={handleDispatch}
+        onCancel={closeDispatch}
+        okText="确认出库"
+        cancelText="取消"
+        confirmLoading={dispatch.isPending}
+        okButtonProps={{
+          disabled: !canDispatch || dispatch.isPending,
+        }}
+        cancelButtonProps={{
+          disabled: dispatch.isPending,
+        }}
+        closable={!dispatch.isPending}
+        keyboard={!dispatch.isPending}
+        destroyOnHidden
+      >
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Text>
+            批次：{dispatchBatch?.batchNo ?? '不可用'}
+            {' · '}
+            {dispatchBatch?.herbName ?? ''}
+          </Text>
+
+          <BatchQueryError error={error} onRetry={reload} />
+
+          {loading ? (
+            <Text type="secondary">正在刷新批次信息，请稍后……</Text>
+          ) : !error && !batchCanDispatch ? (
+            <Alert
+              showIcon
+              type="warning"
+              title="该批次当前不可出库"
+              description="仅审核通过且未分配的仓储批次可以出库，请关闭弹窗后检查最新状态。"
+            />
+          ) : null}
+
+          <div>
+            <Text strong>收货采购组织</Text>
+            <Select<string>
+              aria-label="收货采购组织"
+              placeholder="请选择采购组织"
+              value={selectedRecipient?.id}
+              onChange={(value) => setBuyerOrganizationId(value)}
+              options={recipients.map((recipient) => ({
+                value: recipient.id,
+                label: recipient.name,
+              }))}
+              showSearch={{ optionFilterProp: 'label' }}
+              allowClear
+              loading={recipientsQuery.isFetching}
+              disabled={dispatch.isPending || !recipientsReady}
+              notFoundContent="暂无匹配的采购组织"
+              style={{ width: '100%', marginTop: 8 }}
+            />
+          </div>
+
+          {recipientsQuery.isFetching ? (
+            <Text type="secondary">正在核验可选采购组织……</Text>
+          ) : null}
+
+          {recipientsQuery.isPaused ? (
+            <Alert
+              showIcon
+              type="warning"
+              title="网络离线，采购组织查询已暂停"
+              description="恢复网络后再继续，当前不能提交出库。"
+            />
+          ) : null}
+
+          {recipientsQuery.isError ? (
+            <Alert
+              showIcon
+              type="error"
+              title="采购组织加载失败"
+              description={recipientsQuery.error.message}
+              action={
+                <Button onClick={() => void recipientsQuery.refetch()}>
+                  重试
+                </Button>
+              }
+            />
+          ) : null}
+
+          {recipientsReady && recipients.length === 0 ? (
+            <Alert
+              showIcon
+              type="info"
+              title="暂无可选采购组织"
+              description="需要存在启用且拥有有效采购账号的采购组织，不能直接出库。"
+            />
+          ) : null}
+
+          <Text type="secondary">
+            出库后，只有指定采购组织可以确认收货；其他采购商仍可浏览已审核批次。
+          </Text>
+        </Space>
+      </Modal>
       {riskBatch && (
         <RiskAnalysisDrawer
           key={riskBatch.id}

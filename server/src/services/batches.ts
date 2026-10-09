@@ -65,6 +65,9 @@ const batchSummarySelect = {
     processorOrganization: {
         select: organizationSelect,
     },
+    buyerOrganization: {
+        select: { id: true, name: true },
+    },
     createdBy: {
         select: {
             id: true,
@@ -191,6 +194,18 @@ export type ProcessingQualityReportInput = {
     summary: string
 }
 
+export type DispatchBatchInput = {
+    buyerOrganizationId: string
+}
+
+export type DispatchRecipient = { id: string; name: string }
+
+// 只允许启用、且至少有一个有效采购账号的采购组织作为收货方。
+const dispatchRecipientWhere = {
+    type: 'buyer', enabled: true,
+    users: { some: { role: 'buyer', status: 'active' } },
+} satisfies Prisma.OrganizationWhereInput
+
 // 内部类型：传给数据库查询层的参数
 type BatchListRepositoryInput = { // 转译后给 prisma 用的查询参数
     where: Prisma.HerbBatchWhereInput // prisma查询的筛选条件对象
@@ -255,6 +270,9 @@ type BatchTransitionRepositoryInput = {
     operatorName: string
 }
 
+type BatchDispatchRepositoryInput = BatchTransitionRepositoryInput & DispatchBatchInput
+type BatchReceiptRepositoryInput = BatchTransitionRepositoryInput & { buyerOrganizationId: string }
+
 // 导出接口：定义批次数据仓库的方法契约
 export interface BatchRepository {
     count(where: Prisma.HerbBatchWhereInput): Promise<number>
@@ -270,8 +288,9 @@ export interface BatchRepository {
     receiveProcessing(input: ProcessorRepositoryInput): Promise<BatchDetailRecord | null>
     completeProcessing(input: CompleteProcessingRepositoryInput): Promise<BatchDetailRecord | null>
     saveProcessingQualityReport(input: ProcessingQualityReportRepositoryInput): Promise<BatchDetailRecord | null>
-    dispatch(input: BatchTransitionRepositoryInput): Promise<BatchDetailRecord | null>
-    confirmReceipt(input: BatchTransitionRepositoryInput): Promise<BatchDetailRecord | null>
+    listDispatchRecipients(): Promise<DispatchRecipient[]>
+    dispatch(input: BatchDispatchRepositoryInput): Promise<BatchDetailRecord | null>
+    confirmReceipt(input: BatchReceiptRepositoryInput): Promise<BatchDetailRecord | null>
 }
 
 type SubmissionResult = { batch: BatchDetailRecord; recipientIds: string[] }
@@ -617,6 +636,11 @@ export async function completeProcessingWithNotifications(
 
 // 创建实例，实现上面 BatchRepository 接口
 const repository: BatchRepository = {
+    listDispatchRecipients: () => prisma.organization.findMany({
+        where: dispatchRecipientWhere,
+        select: { id: true, name: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    }),
     count: (where) => prisma.herbBatch.count({ where }),
     // count方法：调用prisma统计符合where条件的数据条数
 
@@ -749,6 +773,14 @@ const repository: BatchRepository = {
     }),
 
     dispatch: (input) => prisma.$transaction(async (transaction) => {
+        // 前端候选项可能过期，事务内重新检查；不信任提交的组织名称/类型。
+        const recipient = await transaction.organization.findFirst({
+            where: { ...dispatchRecipientWhere, id: input.buyerOrganizationId },
+            select: { id: true },
+        })
+        if (!recipient) {
+            throw new HttpError(400, 'INVALID_DISPATCH_RECIPIENT', '请选择有效的采购组织')
+        }
         const changedAt = new Date()
         const dispatched = await transaction.herbBatch.updateMany({
             where: {
@@ -756,9 +788,11 @@ const repository: BatchRepository = {
                 version: input.expectedVersion,
                 stage: 'warehousing',
                 auditStatus: 'approved',
+                buyerOrganizationId: null,
             },
             data: {
                 stage: 'shipped',
+                buyerOrganizationId: input.buyerOrganizationId,
                 version: { increment: 1 },
             },
         })
@@ -794,6 +828,8 @@ const repository: BatchRepository = {
                 version: input.expectedVersion,
                 stage: 'shipped',
                 auditStatus: 'approved',
+                buyerOrganizationId: input.buyerOrganizationId,
+                buyerOrganization: { is: { type: 'buyer', enabled: true } },
             },
             data: {
                 stage: 'sold',
@@ -961,7 +997,7 @@ function detailWhere(
 function filterDetailForRole(
     batch: BatchDetailRecord,
     user: AuthUser,
-): BatchDetailRecord {
+): BatchDetailRecord & { canConfirmReceipt: boolean } {
     const events = batch.events.filter((event) => {
         // 管理员可以查看全部溯源事件
         if (user.role === 'admin') return true
@@ -974,7 +1010,7 @@ function filterDetailForRole(
     })
 
     return {
-        ...batch,
+        ...filterSummaryForRole(batch, user),
 
         // 必须写在 ...batch 后面，才能覆盖原始的完整事件列表
         events,
@@ -982,6 +1018,17 @@ function filterDetailForRole(
         // 非管理员不返回审核记录。
         // 如果证据、模型名称等是 audit 内部字段，也会一起被隐藏。
         audits: user.role === 'admin' ? batch.audits : [],
+    }
+}
+
+/** 浏览已审核批次不等于可收货；其他采购组织不能获知收货方身份。 */
+function filterSummaryForRole<T extends BatchSummaryRecord>(batch: T, user: AuthUser): T & { canConfirmReceipt: boolean } {
+    const ownsReceipt = user.role === 'buyer' && !!user.organizationId &&
+        batch.buyerOrganization?.id === user.organizationId
+    return {
+        ...batch,
+        buyerOrganization: user.role === 'admin' || ownsReceipt ? batch.buyerOrganization : null,
+        canConfirmReceipt: ownsReceipt && batch.auditStatus === 'approved' && batch.stage === 'shipped',
     }
 }
 
@@ -1028,6 +1075,12 @@ export function createBatchService(
     batches: BatchRepository = repository,
 ) {
     return {
+        async dispatchRecipients(user: AuthUser) {
+            if (user.role !== 'admin') {
+                throw new HttpError(403, 'FORBIDDEN', '仅管理员可以查询出库采购组织')
+            }
+            return { items: await batches.listDispatchRecipients() }
+        },
         async list(user: AuthUser, query: BatchListQuery) {
             // 拼接权限+筛选条件
             const where = listWhere(user, query)
@@ -1046,7 +1099,7 @@ export function createBatchService(
 
             // 组装分页结果返回
             return {
-                items,
+                items: items.map((batch) => filterSummaryForRole(batch, user)),
                 pagination: {
                     page: query.page,
                     pageSize: query.pageSize,
@@ -1350,9 +1403,14 @@ export function createBatchService(
         async dispatch(
             user: AuthUser,
             identifier: string,
+            input: DispatchBatchInput,
         ) {
             if (user.role !== 'admin') {
                 throw new HttpError(403, 'FORBIDDEN', '仅管理员可以确认批次出库')
+            }
+            if (typeof input?.buyerOrganizationId !== 'string' || !input.buyerOrganizationId.trim() ||
+                input.buyerOrganizationId.length > 100) {
+                throw new HttpError(400, 'INVALID_DISPATCH_RECIPIENT', '请选择有效的采购组织')
             }
             const current = await batches.findOne(
                 detailWhere(user, identifier),
@@ -1374,6 +1432,7 @@ export function createBatchService(
             const batch = await batches.dispatch({
                 batchId: current.id,
                 expectedVersion: current.version,
+                buyerOrganizationId: input.buyerOrganizationId,
                 operatorId: user.id,
                 operatorName: user.displayName,
             })
@@ -1390,8 +1449,9 @@ export function createBatchService(
             if (user.role !== 'buyer') {
                 throw new HttpError(403, 'FORBIDDEN', '仅采购商可以确认收货')
             }
+            const buyerOrganizationId = requireOrganizationId(user)
             const current = await batches.findOne(
-                detailWhere(user, identifier),
+                { AND: [detailWhere(user, identifier), { buyerOrganizationId }] },
             )
             if (!current) {
                 throw new HttpError(
@@ -1410,6 +1470,7 @@ export function createBatchService(
             const batch = await batches.confirmReceipt({
                 batchId: current.id,
                 expectedVersion: current.version,
+                buyerOrganizationId,
                 operatorId: user.id,
                 operatorName: user.displayName,
             })

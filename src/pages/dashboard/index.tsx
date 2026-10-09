@@ -8,7 +8,10 @@ import {
   MessageOutlined, ReloadOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import ReactECharts from 'echarts-for-react'
+import { lazy, Suspense } from 'react'
+import PageLoading from '../../components/PageLoading'
+import PageErrorBoundary from '../../components/PageErrorBoundary'
+import type { DashboardChartOption } from '../../components/charts/DashboardChart'
 import { useAuth } from '../../hooks/useAuth'
 import { useDashboardOverview } from '../../hooks/useDashboardOverview'
 import { MessageBell } from '../../components/MessageBell'
@@ -20,12 +23,23 @@ import './index.less'
 
 const { Header, Sider, Content } = Layout
 const { Title, Paragraph, Text } = Typography
+const DashboardChart = lazy(() => import('../../components/charts/DashboardChart'))
+
+// 图表单独延迟加载/兜底，失败不会遮住统计和批次列表。
+function ChartPanel({ option }: { option: DashboardChartOption }) {
+  return <PageErrorBoundary scope="图表">
+    <Suspense fallback={<PageLoading label="正在加载图表…" height={300} />}>
+      <DashboardChart option={option} />
+    </Suspense>
+  </PageErrorBoundary>
+}
 
 // 只保留已经实现、可以到达的页面。
 const menus = [
   { path: '/dashboard', label: '数据概览', icon: <DashboardOutlined /> },
   { path: '/admin/herbs', label: '药材管理', icon: <MedicineBoxOutlined /> },
   { path: '/messages', label: '业务通知', icon: <MessageOutlined /> },
+  { path: '/chat', label: '人工沟通', icon: <MessageOutlined /> },
   { path: '/profile', label: '个人资料', icon: <UserOutlined /> },
 ]
 const batchPath = (batch: DashboardBatch) =>
@@ -134,7 +148,7 @@ export default function Dashboard() {
           value: item.count,
         })) ?? [],
     }],
-  }
+  } satisfies DashboardChartOption
 
   const stageOption = {
     color: [token.colorPrimary],
@@ -151,7 +165,7 @@ export default function Dashboard() {
       barMaxWidth: 36,
       data: data?.stageDistribution.map((item) => item.count) ?? [],
     }],
-  }
+  } satisfies DashboardChartOption
 
   return <Layout className="admin-dashboard">
     <Sider
@@ -284,12 +298,7 @@ export default function Dashboard() {
               >
                 {data.summary.totalBatches === 0
                   ? <Empty description="暂无批次" />
-                  : <ReactECharts
-                    option={categoryOption}
-                    style={{ height: 300 }}
-                    notMerge
-                    lazyUpdate
-                  />}
+                  : <ChartPanel option={categoryOption} />}
               </Card>
             </Col>
             <Col xs={24} lg={12}>
@@ -300,12 +309,7 @@ export default function Dashboard() {
               >
                 {data.summary.totalBatches === 0
                   ? <Empty description="暂无批次" />
-                  : <ReactECharts
-                    option={stageOption}
-                    style={{ height: 300 }}
-                    notMerge
-                    lazyUpdate
-                  />}
+                  : <ChartPanel option={stageOption} />}
               </Card>
             </Col>
           </Row>

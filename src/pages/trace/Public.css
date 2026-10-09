@@ -1,0 +1,39 @@
+.public-trace {
+  min-height: 100svh;
+  padding: 24px 16px;
+  box-sizing: border-box;
+  background: #f5f8f5;
+  color: #23392d;
+  color-scheme: light;
+}
+.public-trace__content {
+  max-width: 960px;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.public-trace__content .ant-card {
+  min-width: 0;
+}
+.public-trace__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.public-trace__cards {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+@media (max-width: 600px) {
+  .public-trace {
+    padding: 16px 12px;
+  }
+  .public-trace__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

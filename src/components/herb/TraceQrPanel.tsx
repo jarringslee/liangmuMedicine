@@ -63,7 +63,7 @@ export default function TraceQrPanel({ traceCode, size = 168, compact = false, d
       </div>
 
       {!compact ? (
-        <Space direction="vertical" align="center" size={4}>
+        <Space orientation="vertical" align="center" size={4}>
           <Text strong copyable={{ text: traceCode }} style={{ fontSize: 13 }}>
             {traceCode}
           </Text>
@@ -73,7 +73,7 @@ export default function TraceQrPanel({ traceCode, size = 168, compact = false, d
             </Text>
           ) : (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              扫码或访问链接查看溯源详情
+              扫码或访问链接查看公开档案（仅已审核批次）
             </Text>
           )}
           <Space size={8} style={{ marginTop: 4 }}>

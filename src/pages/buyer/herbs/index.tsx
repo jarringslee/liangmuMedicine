@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Avatar,
   Breadcrumb,
@@ -42,6 +42,7 @@ import { AuditTag, RiskTag, StageTag } from '../../../components/herb/herbTags'
 import QrScanDrawer from '../../../components/herb/QrScanDrawer'
 import TraceQuickViewModal from '../../../components/herb/TraceQuickViewModal'
 import { getHerbBatchByTraceCode } from '../../../services/herbDataSource'
+import { getAuthSnapshot } from '../../../services/auth'
 import {
   HERB_CATEGORY_LABEL,
   STAGE_LABEL,
@@ -79,6 +80,15 @@ export default function BuyerHerbsPage() {
   const { data, loading, error, reload } = useHerbBatches()
 
   const { confirmReceipt: receiptMutation } = useHerbBatchMutations()
+
+  const receiptLock = useRef(false)
+  const receiptDialog = useRef<ReturnType<typeof Modal.confirm> | null>(null)
+
+  // 静态确认框不随页面自动卸载；只清理本页创建的实例。
+  useEffect(() => () => {
+    receiptDialog.current?.destroy()
+    receiptDialog.current = null
+  }, [session])
 
   const [scanOpen, setScanOpen] = useState(false)
   const [quickViewBatch, setQuickViewBatch] = useState<HerbBatch | null>(null)
@@ -130,25 +140,55 @@ export default function BuyerHerbsPage() {
   }
 
   const handleReceipt = async (batch: HerbBatch) => {
+    if (receiptLock.current || receiptMutation.isPending) return
+
+    const current = getAuthSnapshot()
+    if (current.status !== 'authenticated' || current.session !== session) {
+      message.warning('登录身份已变化，请重新确认收货')
+      return
+    }
+
+    // 这里只做体验校验，最终归属和阶段仍由后端核验。
+    if (batch.canConfirmReceipt !== true || loading || error) {
+      message.warning('该批次当前不可收货，请刷新后再试')
+      return
+    }
+
+    receiptLock.current = true
+
     try {
       await receiptMutation.mutateAsync({
         batchId: batch.id,
-        operatorName: session?.displayName ?? '采购商',
       })
+
       message.success('已确认收货，批次流转完成')
-    } catch (e) {
-      message.error(`确认收货失败：${(e as Error).message}`)
+    } catch (error) {
+      message.error(`确认收货失败：${(error as Error).message}`)
+      reload()
+    } finally {
+      receiptLock.current = false
     }
   }
 
   const confirmReceipt = (batch: HerbBatch) => {
-    Modal.confirm({
+    if (receiptDialog.current || receiptLock.current || receiptMutation.isPending) return
+
+    if (batch.canConfirmReceipt !== true || loading || error) {
+      message.warning('该批次当前不可收货，请刷新后再试')
+      return
+    }
+
+    const dialog = Modal.confirm({
       title: '确认收到该药材批次？',
       content: `批次：${batch.batchNo} · ${batch.herbName}`,
       okText: '确认收货',
       cancelText: '取消',
       onOk: () => handleReceipt(batch),
+      afterClose: () => {
+        if (receiptDialog.current === dialog) receiptDialog.current = null
+      },
     })
+    receiptDialog.current = dialog
   }
 
   const handleLogout = () => {
@@ -272,7 +312,7 @@ export default function BuyerHerbsPage() {
             <Spin />
           </Flex>
         ) : filtered.length === 0 ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Empty
               className="buyer-herbs__empty"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -285,7 +325,7 @@ export default function BuyerHerbsPage() {
               <Col xs={24} sm={12} md={8} xl={6} key={b.id}>
                 <Card
                   className="buyer-herbs__card"
-                  bordered={false}
+                  variant="borderless"
                   hoverable
                   onClick={() => navigate(`/trace/${b.traceCode}`, { state: { fromInternal: true } })}
                   cover={
@@ -342,7 +382,7 @@ export default function BuyerHerbsPage() {
                         查看详情
                       </Button>
                     </Link>
-                    {b.stage === 'shipped' ? (
+                    {b.canConfirmReceipt === true ? (
                       <Button
                         type="link"
                         size="small"
@@ -351,7 +391,9 @@ export default function BuyerHerbsPage() {
                           receiptMutation.isPending &&
                           receiptMutation.variables?.batchId === b.id
                         }
+                        disabled={receiptMutation.isPending || !!error}
                         onClick={(event) => {
+                          // 不让收货点击冒泡成整张卡片的详情跳转。
                           event.stopPropagation()
                           confirmReceipt(b)
                         }}

@@ -1,6 +1,9 @@
-/** 构建当前站点下的溯源详情链接 */
+/** 构建当前站点下的公开溯源分享链接。 */
 export function buildTraceUrl(traceCode: string): string {
-  if (typeof window === 'undefined') return `/trace/${traceCode}`
-  const base = window.location.origin
-  return `${base}/trace/${traceCode}`
+  const code = traceCode.trim().toUpperCase()
+  const path = `/public/trace/${encodeURIComponent(code)}`
+
+  if (typeof window === 'undefined') return path
+
+  return `${window.location.origin}${path}`
 }

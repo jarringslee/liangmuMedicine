@@ -20,6 +20,8 @@ import type {
     HerbOrigin,
     RiskLevel,
     Stage,
+    DispatchRecipient,
+    DispatchBatchInput,
 } from '../types/herb'
 import {
     addBatch as addLocalBatch,
@@ -40,6 +42,19 @@ import { parseRiskProgress, parseRiskResult, parseRiskStreamError } from './risk
 import { parseHerbQuestionReply } from './herbQuestionContract'
 import { answerDemoHerbQuestion } from './herbQuestionDemo'
 import type { HerbQuestionReply } from '../types/herbQuestion'
+
+import type { PublicTraceBatch } from '../types/publicTrace'
+import { isTraceCode } from '../utils/traceCode'
+import { parsePublicTraceReply } from './publicTraceContract'
+import { buildDemoPublicTrace } from './publicTraceDemo'
+
+import {
+    confirmDemoReceipt,
+    dispatchDemoBatch,
+    listDemoDispatchRecipients,
+    parseDispatchRecipients,
+    withDemoReceiptPermission,
+} from './batchDispatchSupport'
 
 import type {
     RiskAnalysis,
@@ -116,6 +131,13 @@ type ApiBatchSummary = {
     updatedAt: string // 批次最后更新时间
     growerOrganization: ApiOrganization // 种植机构信息
     processorOrganization: ApiOrganization | null // 加工机构，不需要加工时为null
+
+    buyerOrganization: {
+        id: string
+        name: string
+    } | null
+    canConfirmReceipt: boolean
+
     createdBy: {
         id: string // 创建人id
         displayName: string // 创建人展示名称
@@ -298,6 +320,11 @@ function toHerbBatch(
         // 从接口返回的种植机构对象，提取id和name平铺到当前批次对象
         growerId: batch.growerOrganization.id,
         growerName: batch.growerOrganization.name,
+
+        buyerId: batch.buyerOrganization?.id,
+        buyerName: batch.buyerOrganization?.name,
+        canConfirmReceipt: batch.canConfirmReceipt === true,
+
         plantingStartDate: formatDate(
             batch.plantingStartDate,
         ),
@@ -440,6 +467,26 @@ async function getApiBatch(
         throw error
     }
 }
+
+/** 管理员出库时读取可选采购组织，页面不区分 API/demo。 */
+export async function listDispatchRecipients(
+    signal?: AbortSignal,
+): Promise<DispatchRecipient[]> {
+    signal?.throwIfAborted()
+
+    if (authMode === 'demo') {
+        return listDemoDispatchRecipients(signal)
+    }
+
+    const response = await apiRequest<unknown>(
+        '/batches/dispatch-recipients',
+        { signal },
+    )
+
+    signal?.throwIfAborted()
+    return parseDispatchRecipients(response)
+}
+
 /**
  * 获取全部药材批次
  * 自动区分模式：demo演示模式读本地数据；正式API模式请求后端接口
@@ -447,8 +494,8 @@ async function getApiBatch(
  */
 export async function listHerbBatches(): Promise<HerbBatch[]> {
     if (authMode === 'demo') {
-        // 演示环境，读取本地写好的批次数据，不用调后端
-        return listLocalBatches()
+        const batches = await listLocalBatches()
+        return batches.map(withDemoReceiptPermission)
     }
     // 正式环境，调用接口拉取全部批次
     return listApiBatches()
@@ -461,8 +508,8 @@ export async function listHerbBatches(): Promise<HerbBatch[]> {
  */
 export async function getHerbBatchById(id: string): Promise<HerbBatch | null> {
     if (authMode === 'demo') {
-        // demo模式读取本地存储，按id查找
-        return getLocalBatchById(id)
+        const batch = await getLocalBatchById(id)
+        return batch ? withDemoReceiptPermission(batch) : null
     }
     // API模式调用后端详情接口，传入id查询
     return getApiBatch(id)
@@ -475,13 +522,53 @@ export async function getHerbBatchById(id: string): Promise<HerbBatch | null> {
  */
 export async function getHerbBatchByTraceCode(traceCode: string): Promise<HerbBatch | null> {
     if (authMode === 'demo') {
-        // demo模式本地按溯源码查找
-        return getLocalBatchByTraceCode(traceCode)
+        const batch = await getLocalBatchByTraceCode(traceCode)
+        return batch ? withDemoReceiptPermission(batch) : null
     }
     // API模式调用后端详情接口，传入溯源码查询
     return getApiBatch(traceCode.trim().toUpperCase())
 }
 
+/**
+ * 获取匿名公开档案。
+ * 与登录后的完整详情分开，不使用私有详情接口。
+ */
+export async function getPublicTraceByCode(
+    traceCode: string,
+    signal?: AbortSignal,
+): Promise<PublicTraceBatch | null> {
+    signal?.throwIfAborted()
+
+    const code = traceCode.trim().toUpperCase()
+    if (!isTraceCode(code)) return null
+
+    if (authMode === 'demo') {
+        const batch = await getLocalBatchByTraceCode(code)
+        signal?.throwIfAborted()
+
+        return buildDemoPublicTrace(batch)
+    }
+
+    try {
+        const response = await apiRequest<unknown>(
+            `/public/trace/${encodeURIComponent(code)}`,
+            {
+                auth: false,
+                signal,
+            },
+        )
+
+        return parsePublicTraceReply(response, code)
+    } catch (error) {
+        // 不存在或暂不可公开，由页面统一展示空结果。
+        if (error instanceof ApiError && error.status === 404) {
+            return null
+        }
+
+        // 网络故障、限流、服务异常不能伪装成“档案不存在”。
+        throw error
+    }
+}
 
 /**
  * 创建批次。
@@ -744,25 +831,28 @@ export async function saveProcessingQualityReport(
 }
 
 /**
- * 管理员确认出库。
- * 页面不直接判断数据源，demo/API 的区别继续收口在数据源层。
+ * 管理员出库：提交目标采购组织，不提交当前操作人身份。
+ * 页面不区分 demo/API，统一调用此方法。
  */
 export async function dispatchHerbBatch(
     batchId: string,
-    operatorName: string,
+    input: DispatchBatchInput,
 ): Promise<HerbBatch> {
     if (authMode === 'demo') {
-        return setLocalStage(batchId, 'shipped', {
-            operatorName,
-            operatorRole: 'admin',
-            note: '管理员已确认出库，批次进入运输中。',
-        })
+        return dispatchDemoBatch(
+            batchId,
+            input.buyerOrganizationId,
+        )
     }
 
     const response = await apiRequest<ApiBatchDetailResponse>(
         `/batches/${encodeURIComponent(batchId)}/shipping/dispatch`,
         {
             method: 'POST',
+            // 显式选择允许提交的字段。
+            body: {
+                buyerOrganizationId: input.buyerOrganizationId,
+            },
         },
     )
 
@@ -770,19 +860,14 @@ export async function dispatchHerbBatch(
 }
 
 /**
- * 采购商确认收货。
- * API 模式的操作人由服务端登录身份生成，前端不传可信身份字段。
+ * 采购商收货：不提交组织或操作人。
+ * API 由后端登录身份确定；demo 从当前演示身份读取。
  */
 export async function confirmHerbReceipt(
     batchId: string,
-    operatorName: string,
 ): Promise<HerbBatch> {
     if (authMode === 'demo') {
-        return setLocalStage(batchId, 'sold', {
-            operatorName,
-            operatorRole: 'buyer',
-            note: '采购商已确认收货，批次完成本次流转。',
-        })
+        return confirmDemoReceipt(batchId)
     }
 
     const response = await apiRequest<ApiBatchDetailResponse>(

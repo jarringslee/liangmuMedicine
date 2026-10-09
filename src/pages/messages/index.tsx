@@ -105,15 +105,15 @@ export default function MessagesPage() {
           <Space size="middle" wrap>
             <MedicineBoxOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
             <Title level={4} style={{ margin: 0 }}>
-              消息中心
+              业务通知
             </Title>
           </Space>
-          <Link to={navigation.homePath}>
+          <Space wrap><Link to="/chat">{session?.role === 'buyer' ? '联系平台客服' : '人工沟通'}</Link><Link to={navigation.homePath}>
             <Space>
               <ArrowLeftOutlined />
               返回{navigation.homeLabel}
             </Space>
-          </Link>
+          </Link></Space>
         </Flex>
       </Header>
 
@@ -129,7 +129,7 @@ export default function MessagesPage() {
         <Alert type={authMode === 'api' ? 'info' : 'warning'} showIcon
           title={authMode === 'api' ? '真实业务通知' : '本地演示通知'}
           description={authMode === 'api'
-            ? '消息按账号保存在数据库；建档、审核、采收和加工入库会生成对应业务通知，实时提示与重连会触发重新查询。人工聊天尚未接入。'
+            ? '通知按账号保存在数据库；建档、审核、采收和加工入库会生成对应业务通知，实时提示与重连会触发重新查询。人工沟通请进入独立会话页面。'
             : '当前使用浏览器演示数据与本地已读记录，不连接通知后端，也不是实时聊天室。'}
           style={{ marginBottom: 16 }} />
         {query.error && <Alert type="error" showIcon title="通知查询失败"

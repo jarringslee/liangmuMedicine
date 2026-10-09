@@ -15,7 +15,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { HerbBatch } from '../types/herb'
-import type { BatchEvent, Stage } from '../types/herb'
+import type { BatchEvent, DispatchBatchInput, Stage } from '../types/herb'
 import {
   addBatchEvent,
   updateBatch,
@@ -227,23 +227,23 @@ export function useHerbBatchMutations() {
   const dispatch = useMutation({
     mutationFn: ({
       batchId,
-      operatorName,
+      input,
     }: {
       batchId: string
-      operatorName: string
-    }) => dispatchHerbBatch(batchId, operatorName),
+      input: DispatchBatchInput
+    }) => dispatchHerbBatch(batchId, input),
     onSuccess: invalidate,
+    retry: false,
   })
 
   const confirmReceipt = useMutation({
     mutationFn: ({
       batchId,
-      operatorName,
     }: {
       batchId: string
-      operatorName: string
-    }) => confirmHerbReceipt(batchId, operatorName),
+    }) => confirmHerbReceipt(batchId),
     onSuccess: invalidate,
+    retry: false,
   })
   return {
     create,

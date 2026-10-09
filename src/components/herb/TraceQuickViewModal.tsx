@@ -75,12 +75,12 @@ export default function TraceQuickViewModal({ open, batch, role, onClose, onView
           </Space>
         </Flex>
       }
-      destroyOnClose
+      destroyOnHidden
     >
       {batch ? (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {/* 关键信息卡 */}
-          <Card bordered={false} className="trace-quickview__hero">
+          <Card variant="borderless" className="trace-quickview__hero">
             <Flex gap={16} align="flex-start" wrap>
               <div
                 className="trace-quickview__cover"
@@ -141,7 +141,7 @@ export default function TraceQuickViewModal({ open, batch, role, onClose, onView
 
           {/* 溯源链路 */}
           <Card
-            bordered={false}
+            variant="borderless"
             size="small"
             title={
               <Space>

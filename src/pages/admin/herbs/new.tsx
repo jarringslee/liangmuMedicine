@@ -189,7 +189,7 @@ export default function AdminHerbNewPage() {
         />
 
         {createdBatch ? (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Result
               status="success"
               title="药材批次创建成功"
@@ -262,7 +262,7 @@ export default function AdminHerbNewPage() {
             </Row>
           </Card>
         ) : (
-          <Card bordered={false}>
+          <Card variant="borderless">
             <Form<FormValues>
               form={form}
               layout="vertical"
@@ -369,7 +369,7 @@ export default function AdminHerbNewPage() {
 
                 <Col xs={24}>
                   <Form.Item label="封面图（演示环境本地暂存）" className="herb-form__upload">
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                       <Upload
                         accept="image/*"
                         fileList={fileList}

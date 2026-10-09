@@ -13,7 +13,7 @@ export default function BatchQueryError({ error, onRetry }: BatchQueryErrorProps
     <Alert
       showIcon
       type="error"
-      message="批次数据加载失败"
+      title="批次数据加载失败"
       description={error.message}
       action={<Button onClick={onRetry}>重试</Button>}
       style={{ marginBottom: 16 }}

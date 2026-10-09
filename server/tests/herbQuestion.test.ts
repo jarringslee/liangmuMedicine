@@ -20,7 +20,7 @@ const buyer: AuthUser = {
   id: 'buyer', username: 'buyer', email: 'buyer@example.test', displayName: '采购商',
   role: 'buyer', organizationId: null, organization: null,
 }
-function fixture(): BatchDetailRecord {
+function fixture(): BatchDetailRecord & { canConfirmReceipt: boolean } {
   const now = new Date('2026-10-05T00:00:00Z')
   return {
     id: 'batch-test', batchNo: 'YM-TEST', traceCode: 'YM-TRACE-TEST', herbName: '丹参',
@@ -29,7 +29,7 @@ function fixture(): BatchDetailRecord {
     stage: 'planting', auditStatus: 'approved', riskLevel: 'normal', version: 1,
     createdAt: now, updatedAt: now, createdBy: { id: 'grower', displayName: '种植商', role: 'grower' },
     growerOrganization: { id: 'grower-org', name: '测试组织', code: 'TEST', type: 'grower', province: null, city: null },
-    processorOrganization: null, attachments: [], audits: [], events: [],
+    processorOrganization: null, buyerOrganization: null, canConfirmReceipt: false, attachments: [], audits: [], events: [],
   }
 }
 function mockModel(output?: unknown): AuditModel {

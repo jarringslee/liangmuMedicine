@@ -9,7 +9,7 @@
 - Prisma V2 多组织核心模型
 - `@prisma/adapter-pg` + `pg` PostgreSQL Driver Adapter
 - 共享 Prisma Client 与进程退出时的连接释放
-- 三条 PostgreSQL migration 均已应用：初始模型、V2 核心模型（含通知）、AI 专用会话表
+- 五条 PostgreSQL migration 均已应用：初始模型、V2 核心模型（含通知）、AI 专用会话表、独立人工聊天三表、批次收货采购组织
 - 可重复执行的开发 seed
 - 登录、当前用户查询、角色守卫、账号和组织状态检查
 - 一小时 Access Token、登录限流及统一错误响应
@@ -25,7 +25,9 @@
 - 第十六刀本人持久化会话、受限多轮、编号定位与规则分流（迁移、前端与真实数据库/DeepSeek/浏览器本地验收完成）
 - 第十七刀管理员全量统计只读接口（前后端与本地浏览器验收完成）
 - `/auth/me` 已有 username、姓名、邮箱、角色与组织字段直接供第十八刀只读个人资料页使用；本刀没有增加资料编辑或改密接口
-- 不修改真实数据库、不消耗模型费用的 103 项鉴权/批次/风险分析/资料问答/通知/聊天/看板自动化测试
+- 第二十刀独立人工聊天 REST、联系人/成员授权、UUID 幂等、顺序/已读游标与 Socket.IO 双方提示，采购商仅平台客服
+- 第二十二刀匿名白名单溯源只读接口及前端公开页面/分享入口（本地验收完成，公网/微信真机待验证）
+- 不修改真实数据库、不消耗模型费用的 124 项鉴权/批次/风险分析/资料问答/通知/AI与人工聊天/看板/公开溯源/收货归属自动化测试
 
 ## 本地准备
 
@@ -173,9 +175,20 @@ npm run prisma:migrate:dev -- --name 迁移名称
 
 MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删除本地凭证，不会撤销已泄漏的 Token；它仍可能在过期前使用。部署必须使用 HTTPS，JWT 密钥不得传入前端。
 
+## 匿名公开溯源接口（第二十二刀本地完成）
+
+`GET /api/public/trace/:traceCode` 不要求 JWT，也不因无效 JWT 拒绝公开查询。只接受完整溯源码，无额外查询参数；返回 `{ batch }`。后端与前端类型/数据源/Query、独立 `/public/trace/:traceCode` 页面及二维码分享链接已本地接入；公开页绕开登录恢复/私有 AI/实时订阅，既有完整详情/AI 仍要求登录并按权限检查。第二组只修前端与测试/记录，后端重新通过 typecheck/120 项测试/build，没有数据库写入。
+
+- 批次必须审核通过、种植组织启用且为种植机构；未知、未审、驳回、种植组织停用统一 404，不泄露具体拒绝原因
+- 白名单：药材/批次号/溯源码、类别、省市区县、机构名称、种植日期、阶段/风险标记和登记/更新时间。没有地块地址、内部 ID、账号/姓名、自由文本、附件、审核意见或 AI 记录；白名单中的名称仍需人工审核，非自动个人信息检测或质量认证
+- 节点仅建档/阶段变更/质检/仓储/运输，且 visibleRoles 为空。仅返回类型/时间/受控阶段，最多最近 100 条，`eventsTruncated` 表示截断；不返回原始标题/备注/操作人/payload
+- 查询使用最小 select、同一只读数据库快照，service 再次核验公开资格；所有响应 no-store。每连接 IP 每分钟 60 次内存限流，429 带 Retry-After；多实例共享限流与可信代理部署另行配置，不能信任任意 X-Forwarded-For
+- 没有匿名列表、AI 或写接口；已发送的公开内容不可撤回，客户端缓存策略不能代替服务器审核状态检查。静态 demo 原始 JSON 可下载，本地筛选不是服务端安全隔离
+- 本机真实只读查询 `YM-TRACE-2026-0001` 返回 200/no-store/3 个公开节点；浏览器进一步验证输码/旧链接、统一 404/非法输入、登录回跳与 375px 窄屏。后端 120 项测试、typecheck/build 通过；没有数据库结构/数据写入或 AI 调用，公网/微信/摄像头真机未验收
+
 ## 批次接口
 
-全部接口均要求 `Authorization: Bearer <accessToken>`，并设置 `Cache-Control: no-store`。
+本节 `/api/batches` 接口均要求 `Authorization: Bearer <accessToken>`，并设置 `Cache-Control: no-store`；上面的独立公开接口不是完整详情的免鉴权版本。
 
 读取接口：
 
@@ -200,12 +213,15 @@ MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删�
 - `POST /api/batches/:identifier/processing/receive`：加工商认领未分配批次，绑定当前加工组织并推进为 `processing`
 - `POST /api/batches/:identifier/processing/complete`：本加工组织写入加工记录与阶段事件，推进为 `warehousing`
 - `POST /api/batches/:identifier/processing/quality-report`：本加工组织为加工中或仓储批次保存质检文字摘要
-- `POST /api/batches/:identifier/shipping/dispatch`：仅管理员可将审核通过的仓储批次推进为 `shipped`，不接收客户端操作人字段
-- `POST /api/batches/:identifier/receipt/confirm`：仅采购商可将审核通过的已出库批次推进为 `sold`，不接收客户端操作人字段
+- `GET /api/batches/dispatch-recipients`：仅管理员读取启用且至少有一名有效采购账号的采购组织 ID/名称，不接受额外 query；固定路径在 `/:identifier` 前注册
+- `POST /api/batches/:identifier/shipping/dispatch`：仅管理员提交 `{ buyerOrganizationId }`，事务内重新校验目标组织，把未分配、审核通过的仓储批次推进为 `shipped` 并保存收货组织/事件；拒绝额外身份/阶段字段
+- `POST /api/batches/:identifier/receipt/confirm`：请求体为空；仅指定采购组织可将审核通过的已出库批次推进为 `sold`，组织与操作人均由登录身份生成。不存在/非所属/历史未分配统一 404，重复或版本竞争 409
 
-请求体使用 Zod 严格校验，不接受客户端提交组织、创建人、事件操作人和初始审核状态等可信字段。加工操作通过登录身份绑定组织；出库和收货接口使用数据库事务及 `version + 当前阶段 + 审核状态` 条件更新，避免重复请求或并发操作覆盖结果。业务日期按 `Asia/Shanghai` 判断，避免 UTC 服务器在中国时区凌晨误判“今天”。
+请求体使用 Zod 严格校验，不接受客户端伪造当前账号组织、创建人、事件操作人和初始审核状态等可信字段。出库的目标采购组织属于业务选择，并非当前账号身份，仍须服务端核验；加工与收货使用登录身份绑定组织。出库/收货使用数据库事务及 `version + 当前阶段 + 审核状态 + 收货组织` 条件更新，避免重复请求或并发覆盖；收货更新同时要求组织启用且类型为 buyer。业务日期按 `Asia/Shanghai` 判断。
 
-当前数据模型没有订单、合同、物流单、采购商组织归属或指定收货人关系。因此收货接口的 MVP 权限只是“已登录且角色为采购商”，任一采购商都能确认任一审核通过的已出库批次；这只能演示阶段闭环，不能视为生产级订单所有权校验。
+第二十三刀已新增可空的 `buyerOrganizationId`/关联与索引，第五条迁移 `20261008090000_batch_buyer_organization` 已应用到本机 localhost:5432/liangmu_medicine；没有回填历史批次、修改 seed 或运行 reset。采购商仍浏览全部已审核批次，但只有所属收货组织可以收货。列表/详情增加派生 `canConfirmReceipt`，收货组织 ID/名称只返回给管理员或所属采购商，非所属采购商/其他角色置 null；匿名白名单不增加采购组织字段。这是组织归属，不是订单、合同、支付或个人指定收货人。
+
+后端 typecheck、124 项测试和 build 通过；显式 `npx tsx tests/batchReceipt.database-smoke.ts` 在本机随机创建 6 个组织、5 个用户、2 个批次，验证有效/停用/无有效账号候选、跨组织/旧未分配拒绝、并发出库/收货及事件数量；finally 按精确 ID 清理，既有批次阶段/版本/收货字段未改变。未调用 AI。新 Prisma Client 已生成，开发服务须重启以确保加载新模型。2026-10-09 两组前端均接入，当前 127 项前端与 124 项后端测试、类型/lint/两种前端构建及后端 build 通过；管理员选择组织出库、采购商能力按钮及提交、换身份保护、同步防重和缓存刷新均已连接新契约。浏览器另用 4 个临时组织/3 个账号/2 个批次完成真实出库、非所属仅浏览、所属收货/刷新和旧未分配无按钮验收，核对版本与事件后按精确 ID 清理及级联清理；不修改 seed/真实业务记录，无新迁移、reset 或 AI 调用。静态弹窗/提示主题上下文警告列入前端收尾，不代表公网/微信真机完成。
 
 ## AI 风险审核接口
 
@@ -263,10 +279,30 @@ Agent 使用 `get_batch_snapshot`、`inspect_trace_records` 两个只读工具�
 - Express 与 Socket.IO 共用 HTTP Server；客户端使用 `/socket.io`，handshake.auth 仅接受 `{ token }`，JWT 验证与数据库 currentUser 检查独立于前端路由。服务端决定用户房间，不开放任意 join 指令；Origin 限定 CLIENT_ORIGIN，无 Origin 的 CLI 也必须有合法 JWT
 - `notifications:changed` 只提醒前端缓存失效，不携带通知正文。JWT 到期主动断开；长连接每 30 秒检查账号、组织与角色变化，变化时发送 session:invalid 并断开（不是每帧实时检查）。每个 REST 请求仍独立认证
 - 服务为单实例内存广播，没有 Redis adapter、outbox、持久化事件重放或必达保证。提示失败不撤销已提交业务；前端必须在连接/重连时查询 PostgreSQL 补齐，消息表是唯一持久化来源。参考 [Socket.IO 交付保证](https://socket.io/docs/v4/delivery-guarantees/)
-- 第十九刀新增 2 项事务/收件人回归并将 HTTP、Socket 测试扩展到非管理员，当前后端共 103 项通过；覆盖提交后推送、本人房间、Origin、断线补查、JWT 到期、账号停用及角色/组织变化
+- 第十九刀新增 2 项事务/收件人回归并将 HTTP、Socket 测试扩展到非管理员，当时后端共 103 项通过；覆盖提交后推送、本人房间、Origin、断线补查、JWT 到期、账号停用及角色/组织变化
 - 真实 PostgreSQL 烟测生成一条随机批次，审核、采收、加工入库分别命中 1 名种植商、2 名加工商和 2 名管理员；临时批次、事件、审核与通知均已精确清理，没有执行 seed/migration/reset
 - 前端数据源、Query Hook、App 全局订阅、消息中心与铃铛已向四角色开放。本地浏览器验证加工商/采购商未读与通知列表、种植商空态及各角色返回路径；本次浏览器未模拟网络断线，不将集成测试结论冒充浏览器结论
-- 聊天室、质检/出库/收货通知、采购商关注关系、生产代理/部署均未实现或未验证。pg 弃用提示仍为工程化待办，不影响本轮通过结果
+- 人工聊天已在第二十刀独立接入；质检/出库/收货通知、采购商关注关系、生产代理/部署仍未实现或未验证。pg 弃用提示仍为工程化待办
+
+## 人工聊天 REST 与实时提示（第二十刀）
+
+| 接口 | 请求与用途 |
+| --- | --- |
+| `GET /api/chat/contacts?search=账号或姓名或组织` | 当前可联系账号，最多 30 条及 hasMore |
+| `GET /api/chat/conversations` | 当前可访问的本人最近 100 个会话、预览、未读数及 hasMore |
+| `POST /api/chat/conversations` | `{ recipientId }`，服务端检查联系人并创建/复用双方私聊 |
+| `GET /api/chat/conversations/:id/messages?before=sequence` | 默认最新 40 条，升序返回，nextBefore 用于加载更早历史 |
+| `POST /api/chat/conversations/:id/messages` | `{ clientMessageId: UUID, content }`，最多 2000 字符纯文本 |
+| `PATCH /api/chat/conversations/:id/read` | `{ sequence }`，只推进本人的已读游标，不超过现有位置 |
+
+- 所有请求独立认证、严格 Zod 校验与 no-store；不接受客户端发送人、组织、角色、sequence 或成员列表。未知与越权联系人/会话统一 404，UUID 复用改原文返回 409，非法已读位置 400
+- `chatContactWhere` 查询有效账号与有效匹配组织：buyer 仅 admin；admin 可联系四角色；grower/processor 可联系同组织、admin 和已绑定批次合作组织。管理员也不能读取未参与的私聊；协作撤销后列表/历史/发送/已读均失去访问权
+- 新增 `ChatConversation` / `ChatParticipant` / `ChatMessage`，不用 Notification 或 Assistant 表冒充人工聊天。双方排序 pairKey 唯一，senderId/clientMessageId 唯一，conversationId/sequence 唯一；发送在事务中原子递增会话序号，失败回滚。并发 UUID 唯一冲突后读取已提交结果，不重复保存
+- 消息提交后只向双方 JWT 用户房间发布无正文的 `chat:changed`，与通知共用一个 Socket.IO Server。已读提示仅给本人；readSequence 条件更新保证只能前进，未读只统计另一人发送的消息
+- 会话创建/消息发送共享单账号每分钟 30 次限流；没有多实例共享限流、Redis adapter/outbox、必达提示、群聊、附件、在线状态、撤回或客服排班。REST 是恢复记录的依据；前端重连/聚焦补查并对可见页面每 20 秒轮询兜底
+- `20261007090000_human_chat/migration.sql` 已在本机 liangmu_medicine 应用，仅新增表/索引/外键；第二十刀当时四条迁移全部应用，第二十三刀后为五条。生成新 Prisma Client 后需重启后端加载，热重载未必因生成目录变化自动发生
+- 新增 10 项自动化测试（不接真实数据库/AI）；显式 `npx tsx tests/chat.database-smoke.ts` 使用随机临时组织/用户/批次/会话验证实际 SQL 权限、并发、44 条分页、恢复和撤权。仅允许本机非生产数据库，finally 精确清理，不能用作 seed。加 `--browser` 暂留临时账号供页面验收，Enter 或 10 分钟后清理
+- 本轮真实数据库与临时采购商/管理员双账号浏览器验收通过，临时记录已清理，未改原有业务数据；浏览器未模拟断网，375px 设置也未生效，不将服务测试或 CSS 样式写成真机验证结论
 
 ## 普通聊天兼容接口（第十五刀基线，当前页面使用下方持久化端点）
 
@@ -290,7 +326,7 @@ Agent 使用 `get_batch_snapshot`、`inspect_trace_records` 两个只读工具�
 - 读取/重放历史再次核对角色/组织和批次权限，删除/不可访问批次的原问题、答案、标签及来源全部隐藏。新会话 reply 只包含引用标题/发布者/链接，不包含检索 excerpt；生成期间身份/版本变化不能保存成功答案。医疗边界与注入隔离仍是 MVP 防护，不宣称完全安全。
 - 新增错误：ASSISTANT_STORAGE_NOT_READY（503）、AI_REQUEST_CONFLICT/AI_REQUEST_STALE（409）；旧运行/版本冲突、取消/超时错误沿用。退出不删除数据库消息；历史撤权在重新读取时生效，不提供实时擦除已经显示的消息。旧兼容接口并发保护仍为单进程，限流没有共享 Redis。
 - 第十六刀底座新增 13 项会话/HTTP/Store 条件断言与 1 项小型词法召回评测，验收再补普通追问、编号/前缀召回 2 项，后端共 96 项通过；schema validate/generate、typecheck/test/build 通过。自动化 Mock 与实际模型/数据库验收分开，不报告生产答案正确率。
-- **迁移已应用**：`prisma/migrations/20261006000100_assistant_conversations/migration.sql` 仅新增 AI 聊天 enum/两表/索引/外键，`migrate deploy` 后三条迁移均已应用；不是人工聊天室，不搬迁旧浏览器内存消息。本次未运行 reset、db push 或 seed，保留既有业务数据。
+- **第十六刀迁移已应用**：`prisma/migrations/20261006000100_assistant_conversations/migration.sql` 仅新增 AI 聊天 enum/两表/索引/外键，当时 `migrate deploy` 后三条迁移均已应用；该迁移不是人工聊天室，也不搬迁旧浏览器内存消息。当时未运行 reset、db push 或 seed；第二十刀后四条，第二十三刀收货组织迁移后共五条。
 - 真实 PostgreSQL + HTTP + DeepSeek 验证普通两轮记忆、黄精编号覆盖旧标签、受限 RAG、新服务实例恢复与账号隔离；重复请求不再次调用模型。两个独立 Store 的真实数据库 CAS/租约竞争与过期结果保护通过。浏览器验证刷新/重登恢复、账号隔离、黄精来源/引用及停止；停止记录落库并释放租约，取消不能保证退款。
 - 烟测仅建立两名随机标记临时用户、一组织及 AI 会话，结束精确清理，原批次/事件/审核/附件指纹未改变；临时脚本已删除。未修改 .env/Key，未 commit/push/部署；开发 JWT_SECRET 缺失时重启仍需重登，但已保存的数据库历史不会因此删除。
 
@@ -309,6 +345,7 @@ Agent 使用 `get_batch_snapshot`、`inspect_trace_records` 两个只读工具�
 
 1. 第十六刀全局前端、迁移及真实受限多轮/编号/取消已本地验收；继续补演示问题/资料覆盖与关键回归，不冒充无限记忆、全量采集或生产答案正确率
 2. 数据库后续安全增量 migration 按用户新授权，在说明并检查 SQL 后执行；seed 是初始化数据，不是每轮检查，reset 具有破坏性，不在常规授权内
-3. 第十七刀真实看板、第十八刀真实个人资料/导航与第十九刀核心通知扩面均已完成；下一刀将人工聊天单独建模。内部三端按组织/批次协作关系通信，采购商只联系平台客服；关注与聊天模型尚未实现
-4. 第一版不开发订单、模拟/真实支付；现有收货只有角色级权限，不冒充订单归属/支付履约，详见前述已知边界。真实文件存储后置
-5. 工程化/公网验收：关键回归、必要的匿名脱敏溯源、SSE 代理缓冲/超时/断线取消与 Socket 代理，然后整理演示及面试材料
+3. 真实看板、真实资料/导航、核心通知与第二十刀人工聊天均已本地接入；继续保持内部协作/平台客服权限回归，关注与剩余通知按演示价值后置
+4. 第一版不开发订单、模拟/真实支付；第二十三刀收货组织归属前后端与本机浏览器闭环已完成，不冒充订单/支付履约。真实文件存储后置
+5. 第二十一刀完成前端首轮路由/图表拆包和资源失败兜底，API 模式构建已通过本机预览代理连接此服务验证真实看板、通知、人工聊天与资料；没有修改后端运行代码、schema、数据库迁移或调用 AI。本轮重新通过后端 typecheck、113 项测试与 build
+6. 第二十二刀匿名白名单溯源、第二十三刀收货归属已本地完成；前端演示收尾后准备真实部署，验证生产 SSE 缓冲/超时/断线取消与 Socket 代理、微信/真机，再整理演示及面试材料。Vite preview 的本地代理不是生产反向代理

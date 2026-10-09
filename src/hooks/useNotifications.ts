@@ -7,6 +7,7 @@ import { getAccessToken } from '../utils/auth'
 import type { NotificationQuery } from '../types/notification'
 import { listNotifications, markNotificationRead } from '../services/notificationDataSource'
 import { subscribeDemoNotifications } from '../services/notificationDemo'
+import { chatKey } from './useChat'
 
 // 缓存包含模式和用户 ID，避免不同账号共用通知。
 const notificationKey = (userId: string | undefined) =>
@@ -36,7 +37,7 @@ export function useNotifications(input: NotificationQuery) {
     return { query, markRead }
 }
 
-/** 只在 App 挂载一次，页面和铃铛不各自创建 Socket。 */
+/** 只在 App 挂载一次，通知与人工聊天共用连接，页面和铃铛不各自创建 Socket。 */
 // Socket.IO 实时连接（通常从轮询升级到 WebSocket）；收到通知变更后让缓存失效，不直接追加数组。
 
 export function useNotificationRealtime() {
@@ -73,7 +74,15 @@ export function useNotificationRealtime() {
 
         const sync = () => {
             // 旧连接的回调不能影响新账号。
-            if (active && getAccessToken() === token) invalidate()
+            if (active && getAccessToken() === token) {
+                invalidate()
+                void queryClient.invalidateQueries({ queryKey: chatKey(userId) })
+            }
+        }
+        const syncChat = () => {
+            if (active && getAccessToken() === token) {
+                void queryClient.invalidateQueries({ queryKey: chatKey(userId) })
+            }
         }
 
         const expired = () => {
@@ -86,6 +95,7 @@ export function useNotificationRealtime() {
         // 首次连接、自动重连都重新查询数据库。
         socket.on('connect', sync)
         socket.on('notifications:changed', sync)
+        socket.on('chat:changed', syncChat)
         socket.on('session:invalid', expired)
 
         socket.on('connect_error', (error) => {

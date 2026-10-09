@@ -8,6 +8,7 @@ import { attachNotificationRealtime } from './realtime/notifications.js'
 const auth = createAuthService()
 const app = createApp(auth)
 const server = createServer(app)
+// 业务通知与人工聊天复用同一 JWT 实时连接；数据库消息仍通过 REST 读写。
 const io = attachNotificationRealtime(server, auth)
 
 server.listen(env.PORT, () => {

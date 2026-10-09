@@ -101,6 +101,7 @@ model Organization {
   users            User[]
   grownBatches     HerbBatch[] @relation("BatchGrowerOrganization")
   processedBatches HerbBatch[] @relation("BatchProcessorOrganization")
+  receivedBatches  HerbBatch[] @relation("BatchBuyerOrganization")
 
   @@index([type, enabled])
 }
@@ -124,6 +125,8 @@ model User {
   uploadedAttachments Attachment[]   @relation("AttachmentUploader")
   notifications       Notification[]
   assistantConversation AssistantConversation?
+  chatParticipants      ChatParticipant[]
+  chatMessages          ChatMessage[]
 
   @@index([role, status])
   @@index([organizationId])
@@ -148,6 +151,8 @@ model HerbBatch {
   growerOrganization      Organization  @relation("BatchGrowerOrganization", fields: [growerOrganizationId], references: [id], onDelete: Restrict)
   processorOrganizationId String?
   processorOrganization   Organization? @relation("BatchProcessorOrganization", fields: [processorOrganizationId], references: [id], onDelete: SetNull)
+  buyerOrganizationId     String?
+  buyerOrganization       Organization? @relation("BatchBuyerOrganization", fields: [buyerOrganizationId], references: [id], onDelete: SetNull)
   createdById             String
   createdBy               User          @relation("BatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
   version                 Int           @default(1)
@@ -164,6 +169,7 @@ model HerbBatch {
   @@index([auditStatus, riskLevel])
   @@index([growerOrganizationId, auditStatus])
   @@index([processorOrganizationId, stage])
+  @@index([buyerOrganizationId, stage])
   @@index([createdById])
 }
 
@@ -294,4 +300,43 @@ model AssistantTurn {
   @@unique([conversationId, requestId])
   @@unique([conversationId, sequence])
   @@index([batchId])
+}
+
+// 人工私聊独立于通知和 AI 历史；每对用户只有一个会话。
+model ChatConversation {
+  id           String   @id @default(cuid())
+  pairKey      String   @unique
+  lastSequence Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+
+  @@index([updatedAt, id])
+}
+
+model ChatParticipant {
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readSequence   Int @default(0)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id              String @id @default(cuid())
+  conversationId  String
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  clientMessageId String
+  sequence        Int
+  content         String
+  createdAt       DateTime @default(now())
+
+  @@unique([conversationId, sequence])
+  @@unique([senderId, clientMessageId])
 }

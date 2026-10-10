@@ -56,12 +56,16 @@ export function createApp(
 ) {
   // 初始化express app实例
   const app = express()
+  // 默认关闭；仅信任已核对的代理地址，供 req.ip 与各接口限流共用。
+  app.set('trust proxy', env.TRUST_PROXY)
 
-  // 跨域中间件，读取环境变量配置前端域名，允许携带cookie凭证
+  // CORS 只决定浏览器能否读取响应，不替代 JWT/角色/组织鉴权。
+  // 项目使用 Authorization: Bearer，不依赖跨站 Cookie。
   app.use(
     cors({
-      origin: env.CLIENT_ORIGIN,
-      credentials: true,
+      origin: (origin, done) => done(null, !origin || origin === env.CLIENT_ORIGIN),
+      allowedHeaders: ['Authorization', 'Content-Type'],
+      exposedHeaders: ['Retry-After'],
     }),
   )
 

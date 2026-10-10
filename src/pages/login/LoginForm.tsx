@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Alert, Button, Flex, Form, Input, message, Segmented, Tabs, Typography } from 'antd'
+import { App as AntdApp, Alert, Button, Flex, Form, Input, Segmented, Tabs, Typography } from 'antd'
 import { useAuth } from '../../hooks/useAuth'
 import { loginRoleTabs, type LoginRoleKey } from '../../mock/login/roles'
 import { authMode } from '../../config/api'
@@ -15,6 +15,7 @@ type FieldValues = {
 }
 
 export function LoginForm() {
+  const { message } = AntdApp.useApp()
   const { login, message: authMessage } = useAuth()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)

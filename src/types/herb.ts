@@ -7,7 +7,7 @@ export type Stage =
   | 'processing' // 加工中
   | 'warehousing' // 仓储
   | 'shipped' // 已出库 / 运输
-  | 'sold' // 已售
+  | 'sold' // 已收货；保留旧 API 枚举值，不表示订单/支付完成。
 
 export const STAGE_LABEL: Record<Stage, string> = {
   planting: '种植中',
@@ -15,7 +15,7 @@ export const STAGE_LABEL: Record<Stage, string> = {
   processing: '加工中',
   warehousing: '仓储',
   shipped: '已出库',
-  sold: '已售',
+  sold: '已收货',
 }
 
 /** 合规审核状态（与阶段、风险解耦） */

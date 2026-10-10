@@ -80,6 +80,7 @@ test('demo 出库同时写归属/阶段/事件；当前组织收货，不信任�
   assert.equal(support.withDemoReceiptPermission(shipped).canConfirmReceipt, true)
   const sold = await support.confirmDemoReceipt(batch.id)
   assert.equal(sold.stage, 'sold'); assert.equal(sold.events.length, 2)
+  assert.equal(sold.events.at(-1).title, '阶段变更：已出库 → 已收货')
   assert.equal(sold.canConfirmReceipt, false)
   await assert.rejects(support.confirmDemoReceipt(batch.id), { status: 409 })
   assert.equal((await storage.getById(batch.id)).events.length, 2)

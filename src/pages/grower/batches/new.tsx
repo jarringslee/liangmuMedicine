@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  App as AntdApp,
   Alert,
   Breadcrumb,
   Button,
@@ -18,7 +19,6 @@ import {
   Space,
   Typography,
   Upload,
-  message,
   theme,
 } from 'antd'
 import type { UploadFile } from 'antd'
@@ -75,6 +75,7 @@ function readAsDataUrl(file: File): Promise<string> {
 }
 
 export default function GrowerBatchNewPage() {
+  const { message } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()

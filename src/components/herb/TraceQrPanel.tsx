@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { Button, Space, Typography, message } from 'antd'
+import { App as AntdApp, Button, Space, Typography } from 'antd'
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons'
 import { QRCodeCanvas } from 'qrcode.react'
 import { buildTraceUrl } from '../../utils/traceUrl'
@@ -18,6 +18,7 @@ type Props = {
 
 /** 共用二维码面板：渲染真二维码，支持复制链接 / 下载 PNG */
 export default function TraceQrPanel({ traceCode, size = 168, compact = false, description }: Props) {
+  const { message } = AntdApp.useApp()
   const url = useMemo(() => buildTraceUrl(traceCode), [traceCode])
   const canvasWrapRef = useRef<HTMLDivElement | null>(null)
 

@@ -4,8 +4,8 @@ import { env } from '../config/env.js'
 import { HttpError } from '../middleware/error.js'
 
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60
-const issuer = 'liangmuMedicine'
-const audience = 'liangmuMedicine-web'
+const issuer = 'LiangmuTrace'
+const audience = 'LiangmuTrace-web'
 // 不使用写死的默认密钥。开发临时密钥仅在当前进程有效，生产缺少密钥会被 env 校验拦截。
 const secret = new TextEncoder().encode(env.JWT_SECRET ?? randomBytes(32).toString('hex'))
 if (!env.JWT_SECRET && env.NODE_ENV !== 'test') {

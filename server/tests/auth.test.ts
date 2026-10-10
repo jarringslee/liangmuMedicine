@@ -68,8 +68,8 @@ function handcraftedToken(options: { expired?: boolean; issuer?: string; audienc
   const jwt = new SignJWT({ role: 'admin' })
     .setProtectedHeader({ alg: options.alg ?? 'HS256', typ: 'JWT' })
     .setSubject(options.sub ?? 'buyer').setIssuedAt()
-    .setIssuer(options.issuer ?? 'liangmuMedicine')
-    .setAudience(options.audience ?? 'liangmuMedicine-web')
+    .setIssuer(options.issuer ?? 'LiangmuTrace')
+    .setAudience(options.audience ?? 'LiangmuTrace-web')
   if (!options.noExp) jwt.setExpirationTime(options.expired ? Math.floor(Date.now() / 1000) - 60 : '1h')
   return jwt.sign(new TextEncoder().encode(process.env.JWT_SECRET))
 }
@@ -250,7 +250,7 @@ test('同一 IP 15 分钟超过 20 次失败返回 429', async () => {
 })
 
 test('生产拒绝缺失/过短密钥，开发允许临时密钥', () => {
-  const common = { DATABASE_URL: process.env.DATABASE_URL }
+  const common = { DATABASE_URL: process.env.DATABASE_URL, CLIENT_ORIGIN: 'https://frontend.example.test' }
   assert.equal(envSchema.safeParse({ ...common, NODE_ENV: 'production' }).success, false)
   assert.equal(envSchema.safeParse({ ...common, NODE_ENV: 'production', JWT_SECRET: 'short' }).success, false)
   assert.equal(envSchema.safeParse({ ...common, NODE_ENV: 'production', JWT_SECRET: process.env.JWT_SECRET }).success, true)

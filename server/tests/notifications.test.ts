@@ -28,10 +28,14 @@ const { attachNotificationRealtime } = await import('../src/realtime/notificatio
 const { HttpError, errorHandler } = await import('../src/middleware/error.js')
 const { signAccessToken } = await import('../src/lib/token.js')
 
-const admin = (id = 'admin-a'): AuthUser => ({ id, username: id, email: `${id}@example.test`, displayName: id,
-  role: 'admin', organizationId: null, organization: null })
-const record: NotificationRecord = { id: 'notice-1', type: 'batchSubmitted', batchId: 'batch-1',
-  title: '新批次待审核', content: '请审核丹参', readAt: null, createdAt: new Date('2026-10-05T00:00:00Z') }
+const admin = (id = 'admin-a'): AuthUser => ({
+  id, username: id, email: `${id}@example.test`, displayName: id,
+  role: 'admin', organizationId: null, organization: null
+})
+const record: NotificationRecord = {
+  id: 'notice-1', type: 'batchSubmitted', batchId: 'batch-1',
+  title: '新批次待审核', content: '请审核丹参', readAt: null, createdAt: new Date('2026-10-05T00:00:00Z')
+}
 function setup() {
   const changes = createNotificationChanges()
   const messages = new Map<string, NotificationRecord[]>([['admin-a', [structuredClone(record)]], ['admin-b', []]])
@@ -39,8 +43,10 @@ function setup() {
     async list(id, query) {
       const all = messages.get(id) ?? []
       const filtered = all.filter((item) => query.status === 'all' || (query.status === 'read') === (item.readAt !== null))
-      return { items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
-        total: filtered.length, unreadCount: all.filter((item) => !item.readAt).length }
+      return {
+        items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
+        total: filtered.length, unreadCount: all.filter((item) => !item.readAt).length
+      }
     },
     async markRead(id, messageId) {
       const item = messages.get(id)?.find((item) => item.id === messageId)
@@ -57,8 +63,10 @@ function setup() {
       return id === 'grower' ? { ...admin(id), role: 'grower' } : admin(id)
     },
   }
-  return { changes, messages, service: createNotificationService(repository, changes), auth,
-    disable: () => { disabled = true } }
+  return {
+    changes, messages, service: createNotificationService(repository, changes), auth,
+    disable: () => { disabled = true }
+  }
 }
 async function listen(server: Server) {
   server.listen(0, '127.0.0.1')
@@ -73,8 +81,10 @@ function event<T = unknown>(socket: Socket, name: string): Promise<T> {
   })
 }
 function client(url: string, token: string, origin = 'http://localhost:5173') {
-  return connect(url, { autoConnect: false, reconnection: false, transports: ['websocket'],
-    auth: { token }, extraHeaders: { Origin: origin } })
+  return connect(url, {
+    autoConnect: false, reconnection: false, transports: ['websocket'],
+    auth: { token }, extraHeaders: { Origin: origin }
+  })
 }
 
 test('通知服务按收件人隔离，未读数不受筛选分页影响；越权和未知均 404', async () => {
@@ -129,24 +139,32 @@ test('通知 HTTP 认证、角色、严格查询/请求体和已读响应契约'
 })
 
 test('建档事务内生成有效管理员通知，提交前不推送；失败不推送', async () => {
-  const input = { herbName: '丹参', category: 'root' as const, plantingStartDate: '2026-10-05',
+  const input = {
+    herbName: '丹参', category: 'root' as const, plantingStartDate: '2026-10-05',
     plantingStartDateValue: new Date(), origin: { province: '陕西省', city: '西安市' },
-    batchNo: 'YM-TEST', traceCode: 'YM-TRACE-TEST', growerOrganizationId: 'grower-org', creatorId: 'grower', creatorName: '种植商' }
+    batchNo: 'YM-TEST', traceCode: 'YM-TRACE-TEST', growerOrganizationId: 'grower-org', creatorId: 'grower', creatorName: '种植商'
+  }
   const batch = { id: 'batch-1', batchNo: 'YM-TEST' } as BatchDetailRecord
   let committed = false, published = 0, created = 0
   const tx = {
-    herbBatch: { async create(args: { data: { events: { create: { operatorRole: string } } } }) {
-      assert.equal(args.data.events.create.operatorRole, 'grower'); return batch
-    } },
-    user: { async findMany(args: { where: { role: string; status: string; OR: unknown[] } }) {
-      assert.equal(args.where.role, 'admin'); assert.equal(args.where.status, 'active'); assert.equal(args.where.OR.length, 2)
-      return [{ id: 'admin-a' }, { id: 'admin-b' }]
-    } },
-    notification: { async createMany(args: { data: { recipientId: string; batchId: string; type: string }[] }) {
-      created++; assert.equal(published, 0)
-      assert.deepEqual(args.data.map((item) => item.recipientId), ['admin-a', 'admin-b'])
-      assert.ok(args.data.every((item) => item.batchId === 'batch-1' && item.type === 'batchSubmitted'))
-    } },
+    herbBatch: {
+      async create(args: { data: { events: { create: { operatorRole: string } } } }) {
+        assert.equal(args.data.events.create.operatorRole, 'grower'); return batch
+      }
+    },
+    user: {
+      async findMany(args: { where: { role: string; status: string; OR: unknown[] } }) {
+        assert.equal(args.where.role, 'admin'); assert.equal(args.where.status, 'active'); assert.equal(args.where.OR.length, 2)
+        return [{ id: 'admin-a' }, { id: 'admin-b' }]
+      }
+    },
+    notification: {
+      async createMany(args: { data: { recipientId: string; batchId: string; type: string }[] }) {
+        created++; assert.equal(published, 0)
+        assert.deepEqual(args.data.map((item) => item.recipientId), ['admin-a', 'admin-b'])
+        assert.ok(args.data.every((item) => item.batchId === 'batch-1' && item.type === 'batchSubmitted'))
+      }
+    },
   } as unknown as Prisma.TransactionClient
   const result = await createSubmittedBatch(input, async (work) => {
     const result = await work(tx); assert.equal(published, 0); committed = true; return result
@@ -165,18 +183,22 @@ test('审核结果通知所属种植商，已采收且通过时同时通知有�
   let committed = false
   const tx = {
     herbBatch: { async update() { return batch } },
-    user: { async findMany(args: { where: { role: string; organizationId?: string } }) {
-      if (args.where.role === 'grower') {
-        assert.equal(args.where.organizationId, 'grower-org')
-        return [{ id: 'grower-a' }]
+    user: {
+      async findMany(args: { where: { role: string; organizationId?: string } }) {
+        if (args.where.role === 'grower') {
+          assert.equal(args.where.organizationId, 'grower-org')
+          return [{ id: 'grower-a' }]
+        }
+        assert.equal(args.where.role, 'processor')
+        return [{ id: 'processor-a' }, { id: 'processor-b' }]
       }
-      assert.equal(args.where.role, 'processor')
-      return [{ id: 'processor-a' }, { id: 'processor-b' }]
-    } },
-    notification: { async createMany(args: { data: typeof notifications }) {
-      assert.equal(committed, false)
-      notifications.push(...args.data)
-    } },
+    },
+    notification: {
+      async createMany(args: { data: typeof notifications }) {
+        assert.equal(committed, false)
+        notifications.push(...args.data)
+      }
+    },
   } as unknown as Prisma.TransactionClient
   const published: string[][] = []
   const result = await auditBatchWithNotifications({
@@ -211,9 +233,11 @@ test('审核通过的采收事务通知加工商；加工入库事务通知管�
   const harvestTx = {
     herbBatch: { async update() { return harvested } },
     user: { async findMany() { return [{ id: 'processor-a' }] } },
-    notification: { async createMany(args: { data: typeof harvestNotices }) {
-      harvestNotices.push(...args.data)
-    } },
+    notification: {
+      async createMany(args: { data: typeof harvestNotices }) {
+        harvestNotices.push(...args.data)
+      }
+    },
   } as unknown as Prisma.TransactionClient
   const harvestPublished: string[][] = []
   await harvestBatchWithNotifications({
@@ -233,9 +257,11 @@ test('审核通过的采收事务通知加工商；加工入库事务通知管�
     },
     batchEvent: { async createMany() { return { count: 2 } } },
     user: { async findMany() { return [{ id: 'admin-a' }, { id: 'admin-b' }] } },
-    notification: { async createMany(args: { data: typeof processingNotices }) {
-      processingNotices.push(...args.data)
-    } },
+    notification: {
+      async createMany(args: { data: typeof processingNotices }) {
+        processingNotices.push(...args.data)
+      }
+    },
   } as unknown as Prisma.TransactionClient
   const processingPublished: string[][] = []
   await completeProcessingWithNotifications({
@@ -304,7 +330,7 @@ test('长连接账号停用和 JWT 到期后主动断开，不仅依赖连接时
   const { auth, changes, disable } = setup(), server = createServer()
   const io = attachNotificationRealtime(server, auth, changes, 20), url = await listen(server)
   const expiring = await new SignJWT({}).setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-    .setSubject('admin-a').setIssuer('liangmuMedicine').setAudience('liangmuMedicine-web')
+    .setSubject('admin-a').setIssuer('LiangmuTrace').setAudience('LiangmuTrace-web')
     .setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + 2)
     .sign(new TextEncoder().encode(process.env.JWT_SECRET))
   const a = client(url, expiring), b = client(url, await signAccessToken('admin-b'))

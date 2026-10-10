@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  App as AntdApp,
   Alert,
   Breadcrumb,
   Button,
@@ -14,7 +15,6 @@ import {
   Space,
   Typography,
   Upload,
-  message,
   theme,
 } from 'antd'
 import type { UploadFile } from 'antd'
@@ -61,6 +61,7 @@ function formatOccurredAt(d: Dayjs): string {
 }
 
 export default function GrowerLogNewPage() {
+  const { message } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()

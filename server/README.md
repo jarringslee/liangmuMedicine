@@ -1,4 +1,4 @@
-# liangmuMedicine Server
+# LiangmuTrace Server
 
 良木药谷后端使用 Node.js、Express、TypeScript、PostgreSQL 和 Prisma 7。目前已完成 V2 模型、migration、seed、数据库健康检查、登录/JWT 身份校验、RBAC 角色守卫、按角色和组织过滤的批次读取，以及建档、审核、种植日志、采收、加工认领、加工完成、质检摘要、确认出库和确认收货写接口；React 已接入这些能力。
 
@@ -27,7 +27,7 @@
 - `/auth/me` 已有 username、姓名、邮箱、角色与组织字段直接供第十八刀只读个人资料页使用；本刀没有增加资料编辑或改密接口
 - 第二十刀独立人工聊天 REST、联系人/成员授权、UUID 幂等、顺序/已读游标与 Socket.IO 双方提示，采购商仅平台客服
 - 第二十二刀匿名白名单溯源只读接口及前端公开页面/分享入口（本地验收完成，公网/微信真机待验证）
-- 不修改真实数据库、不消耗模型费用的 124 项鉴权/批次/风险分析/资料问答/通知/AI与人工聊天/看板/公开溯源/收货归属自动化测试
+- 不修改真实数据库、不消耗模型费用的 130 项鉴权/批次/风险分析/资料问答/通知/AI与人工聊天/看板/公开溯源/收货归属/生产配置自动化测试
 
 ## 本地准备
 
@@ -52,11 +52,20 @@ DATABASE_URL=postgresql://postgres:你的密码@localhost:5432/liangmu_medicine?
 
 `.env` 包含密码和 API Key，不得提交到 Git。后端启动和 Prisma 数据库命令都要求存在有效的 `DATABASE_URL`。
 
-开发环境可以不设置 `JWT_SECRET`：服务启动时生成随机密钥，重启后需要重新登录。部署时必须设置 `NODE_ENV=production` 和至少 32 字符的随机 `JWT_SECRET`，缺少密钥会启动失败。可在本地生成密钥后复制到 `.env`，不要提交或发送给前端：
+开发环境可以不设置 `JWT_SECRET`：服务启动时生成随机密钥，重启后需要重新登录。生产必须设置 `NODE_ENV=production`、显式 HTTPS `CLIENT_ORIGIN` 和至少 32 字符的随机 `JWT_SECRET`，非法配置会启动失败。可在本地生成密钥后复制到 `.env`，不要提交或发送给前端：
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
+
+## 生产配置（第二十五刀本地验证，未部署）
+
+- 设置 `NODE_ENV=production`、显式 HTTPS `CLIENT_ORIGIN` 与至少 32 字符的随机 `JWT_SECRET`。来源只能是一个 origin，不带凭证、业务路径、查询或片段；允许尾斜杠并正规化。PostgreSQL URL 必须有主机/数据库名，端口范围为 1～65535
+- `.env.example` 新增 `TRUST_PROXY=off`；实际 `.env` 与 `.env.*` 忽略，模板保留跟踪。dotenv 从当前工作目录读 `.env`，不会自动读 `.env.production`；生产推荐平台环境变量。AI Key 只在后端，数据库 TLS 按提供商要求核对
+- Express 应用显式读取可信代理设置，仅支持 off、loopback 或已核对的 IP/CIDR 列表，拒绝 true/纯跳数/全网 /0。必须另行阻止绕过网关、核对转发头；loopback 不会自动改变服务监听地址。内存限流与广播仍是单实例 MVP，不是全局限流
+- HTTP 仅向配置的前端源给出 CORS 许可；Bearer 不使用跨站 Cookie，预检允许 Authorization/Content-Type、向浏览器暴露 Retry-After。无 Origin 或其他来源仍由 JWT/角色/组织独立鉴权，CORS 不能阻止 CLI 请求。[CORS 原理](https://expressjs.com/en/resources/middleware/cors/)
+- `tests/config.test.ts` 新增 6 项配置/真实本地 HTTP 回归（包含 IP 限流探针），既有 JWT 生产测试补 HTTPS 来源；完整 130 项、typecheck/build 通过，无真实数据库或模型请求
+- Pages 只托管前端；独立 Node HTTPS 后端须支持 `/api`、SSE 无缓冲/不缓存/足够超时以及 `/socket.io` polling/Upgrade，平台/费用/数据库方案与实际上线另确认。外层 `Cloudflare部署指南.md` 已更新；本刀不宣称生产代理、数据库 TLS 或微信已验收
 
 ## 初始化数据库
 
@@ -108,7 +117,7 @@ npm run dev
 ```json
 {
   "status": "ok",
-  "service": "liangmuMedicine API",
+  "service": "LiangmuTrace API",
   "database": "connected",
   "timestamp": "..."
 }
@@ -221,7 +230,7 @@ MVP 暂不实现 Refresh Token 和服务端登出撤销：客户端退出时删�
 
 第二十三刀已新增可空的 `buyerOrganizationId`/关联与索引，第五条迁移 `20261008090000_batch_buyer_organization` 已应用到本机 localhost:5432/liangmu_medicine；没有回填历史批次、修改 seed 或运行 reset。采购商仍浏览全部已审核批次，但只有所属收货组织可以收货。列表/详情增加派生 `canConfirmReceipt`，收货组织 ID/名称只返回给管理员或所属采购商，非所属采购商/其他角色置 null；匿名白名单不增加采购组织字段。这是组织归属，不是订单、合同、支付或个人指定收货人。
 
-后端 typecheck、124 项测试和 build 通过；显式 `npx tsx tests/batchReceipt.database-smoke.ts` 在本机随机创建 6 个组织、5 个用户、2 个批次，验证有效/停用/无有效账号候选、跨组织/旧未分配拒绝、并发出库/收货及事件数量；finally 按精确 ID 清理，既有批次阶段/版本/收货字段未改变。未调用 AI。新 Prisma Client 已生成，开发服务须重启以确保加载新模型。2026-10-09 两组前端均接入，当前 127 项前端与 124 项后端测试、类型/lint/两种前端构建及后端 build 通过；管理员选择组织出库、采购商能力按钮及提交、换身份保护、同步防重和缓存刷新均已连接新契约。浏览器另用 4 个临时组织/3 个账号/2 个批次完成真实出库、非所属仅浏览、所属收货/刷新和旧未分配无按钮验收，核对版本与事件后按精确 ID 清理及级联清理；不修改 seed/真实业务记录，无新迁移、reset 或 AI 调用。静态弹窗/提示主题上下文警告列入前端收尾，不代表公网/微信真机完成。
+后端 typecheck、124 项测试和 build 通过；显式 `npx tsx tests/batchReceipt.database-smoke.ts` 在本机随机创建 6 个组织、5 个用户、2 个批次，验证有效/停用/无有效账号候选、跨组织/旧未分配拒绝、并发出库/收货及事件数量；finally 按精确 ID 清理，既有批次阶段/版本/收货字段未改变。未调用 AI。新 Prisma Client 已生成，开发服务须重启以确保加载新模型。2026-10-09 两组前端均接入，当时 127 项前端与 124 项后端测试、类型/lint/两种前端构建及后端 build 通过；管理员选择组织出库、采购商能力按钮及提交、换身份保护、同步防重和缓存刷新均已连接新契约。浏览器另用 4 个临时组织/3 个账号/2 个批次完成真实出库、非所属仅浏览、所属收货/刷新和旧未分配无按钮验收，核对版本与事件后按精确 ID 清理及级联清理；不修改 seed/真实业务记录，无新迁移、reset 或 AI 调用。当时静态弹窗/提示的主题上下文警告由第二十四刀处理，不代表公网/微信真机完成。
 
 ## AI 风险审核接口
 
@@ -348,4 +357,4 @@ Agent 使用 `get_batch_snapshot`、`inspect_trace_records` 两个只读工具�
 3. 真实看板、真实资料/导航、核心通知与第二十刀人工聊天均已本地接入；继续保持内部协作/平台客服权限回归，关注与剩余通知按演示价值后置
 4. 第一版不开发订单、模拟/真实支付；第二十三刀收货组织归属前后端与本机浏览器闭环已完成，不冒充订单/支付履约。真实文件存储后置
 5. 第二十一刀完成前端首轮路由/图表拆包和资源失败兜底，API 模式构建已通过本机预览代理连接此服务验证真实看板、通知、人工聊天与资料；没有修改后端运行代码、schema、数据库迁移或调用 AI。本轮重新通过后端 typecheck、113 项测试与 build
-6. 第二十二刀匿名白名单溯源、第二十三刀收货归属已本地完成；前端演示收尾后准备真实部署，验证生产 SSE 缓冲/超时/断线取消与 Socket 代理、微信/真机，再整理演示及面试材料。Vite preview 的本地代理不是生产反向代理
+6. 第二十二至二十四刀匿名溯源、收货归属及前端核心收尾已本地完成；第二十五刀补生产配置与 CORS/可信代理，当前前端 135 项、后端 130 项及类型/lint/构建/预算通过，未操作数据库或真实模型。下一步确认平台/费用和数据库公网方案，实际上线另授权；生产 SSE 缓冲/超时/断线取消、Socket 代理及微信/摄像头/真机仍未验收。Vite preview 的本地代理不是生产反向代理

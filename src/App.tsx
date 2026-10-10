@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { ConfigProvider } from 'antd'
+import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { GuestOnly, RequireAuth } from './components/RequireAuth'
@@ -46,24 +46,26 @@ const appTheme = {
 export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={appTheme}>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="/public/trace/:traceCode"
-            element={<PublicTraceRoute />}
-          />
-          <Route
-            path="*"
-            element={
-              <AuthBoundary>
-                <AssistantProvider>
-                  <HerbSyncBridge />
-                </AssistantProvider>
-              </AuthBoundary>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route
+              path="/public/trace/:traceCode"
+              element={<PublicTraceRoute />}
+            />
+            <Route
+              path="*"
+              element={
+                <AuthBoundary>
+                  <AssistantProvider>
+                    <HerbSyncBridge />
+                  </AssistantProvider>
+                </AuthBoundary>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   )
 }

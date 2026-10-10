@@ -1,14 +1,14 @@
-# 良木药谷 liangmuMedicine
+# 良木药谷 LiangmuTrace
 
 良木药谷是使用 React、TypeScript、Node.js 和 PostgreSQL 构建的中药材全链路智能溯源平台。项目围绕种植商、加工商、平台管理员和采购商四类角色，展示药材从建档、审核、种植、采收、加工、质检到下游溯源的协作流程。
 
 项目面向前端与 AI 应用开发岗位作品集。目前已经完成四端前端基础闭环、PostgreSQL V2 核心模型、业务 seed、前后端真实登录/JWT 鉴权，以及“种植商建档 → 管理员审核 → 种植日志 → 采收 → 加工商认领 → 加工/质检 → 仓储 → 管理员出库 → 采购商收货”的真实业务链路；React 通过 TanStack Query 接入 API，同时保留静态 demo 数据源。AI 风险审核 Agent 已接入真实 DeepSeek，并形成建议、人工复核与审计闭环；RAG、多轮 AI 会话、真实看板与四角色真实资料均已完成本地验收。第十九刀完成核心业务通知，第二十刀完成按协作关系授权的一对一人工沟通与采购商平台客服，本地真实双账号收发和数据库恢复已验收；真实后端公网部署尚未完成。
 
-**第一版交付边界（2026-10-09）**：暂不开发订单、模拟/真实支付，现有出库/收货只表示批次流转。收尾范围是全局 AI 聊天升级、真实看板/有效入口、业务通知与内部协作/采购商客服、工程化与公网演示、面试材料；第二十刀后人工工作量估算约 70%～75%，不是当前代码统计。持久化 AI 会话、真实看板、真实资料/导航、核心通知与最小人工聊天已本地接入；第二十一刀完成首轮路由/图表拆包与异常回归，第二十二刀完成匿名白名单溯源页面/分享入口，第二十三刀完成出库指定采购组织/收货归属的本地验收。前端演示收尾、公网部署、真机验证及演示/面试材料仍待完成。
+**第一版交付边界（2026-10-09）**：暂不开发订单、模拟/真实支付，现有出库/收货只表示批次流转。收尾范围是全局 AI 聊天升级、真实看板/有效入口、业务通知与内部协作/采购商客服、工程化与公网演示、面试材料；第二十刀后人工工作量估算约 70%～75%，不是当前代码统计。持久化 AI 会话、真实看板、真实资料/导航、核心通知与最小人工聊天已本地接入；第二十一刀完成首轮路由/图表拆包与异常回归，第二十二刀完成匿名白名单溯源页面/分享入口，第二十三刀完成出库指定采购组织/收货归属。第二十四刀完成提示/弹窗上下文、演示文案与核心窄屏本地验收；公网部署、微信/摄像头/移动真机及演示/面试材料仍待完成。
 
 ## 在线演示
 
-- Cloudflare Pages：<https://liangmumedicine.pages.dev>
+- 既有 Cloudflare Pages：<https://liangmumedicine.pages.dev>；新地址目标为 `https://liangmutrace.pages.dev`，待创建 Pages 项目并部署验收后切换。
 - 当前线上版本是静态前端演示，数据来自内置 JSON 与当前浏览器的 localStorage，不与本机 PostgreSQL 互通。
 
 ## 核心业务链路
@@ -82,6 +82,15 @@
 
 浏览器验证默认生产预览的四角色/18 个页面、采购商越权拦截、图表视觉和 AI 跨路由草稿；临时本机预览代理对登录/图表模块延迟后各失败一次，验证整页/局部反馈、列表仍可用和手动刷新恢复。另以 API 模式构建连接本地 PostgreSQL 验证看板、通知/人工聊天/资料页。没有写业务表单、发送聊天/AI 请求或执行部署；摄像头、微信与移动真机不在本轮结论内。
 
+### 应用上下文与演示收尾（第二十四刀本地完成）
+
+- 根部为 `ConfigProvider → AntdApp → BrowserRouter`；业务组件从 `AntdApp.useApp()` 获取 message/modal 实例，让命令式提示与确认框读取主题/语言上下文。普通 JSX Modal 保留，公开路由不因此接入认证/AI/Socket；已有局部 `message.useMessage()` 仍有效
+- 收货确认保留同步防重、当前身份校验和本页实例清理，不使用 `destroyAll()` 清除其他页面弹窗；前端上下文只解决展示/实例管理，不代替后端授权
+- `sold` 保留为 API/数据库兼容值，展示为“已收货”；受控阶段事件从阶段字典推导标题，普通备注与历史存储不改写。出库/收货不表示订单或支付完成；Timeline 使用 AntD 6 的 start/content/icon
+- 登录轮播只描述已接入的 MVP，移除气象/设备资质/GMP/合同/温湿度/监管接口等未实现声明；列表、输码和二维码仍是并列入口，AI 由人工保留最终审核权
+- 实际浏览器验证桌面与 375×812：出库组织选择/取消、收货确认主题/取消、真实 AI 长回复、人工聊天长词换行/历史滚动/返回联系人。发现并修复采购商页头长姓名竖排；其余核心布局无须追加样式。所测分支控制台无静态主题警告，不代表全站全部弹窗或手机键盘/微信/摄像头已验证
+- 使用 1 次真实 DeepSeek 普通回复验收长内容；人工消息仅在临时账号之间发送，所有临时组织/账号/批次与会话已精确清理，无 seed/reset、业务出库/收货提交、环境密钥变更或部署。前端当前 130 项、后端 124 项回归通过
+
 ### 管理员端
 
 - 真实数据概览与 ECharts 看板：全量批次/待审/风险/仓储指标、类别/阶段分布、最近更新与待审跳转
@@ -131,7 +140,7 @@
 - `GET /api/batches/:identifier`：按数据库 ID、溯源码或批次号读取详情，包含角色可见的事件、审核与附件，编号不改变权限范围
 - 批次建档、审核、日志、采收、加工认领、加工完成、质检摘要、确认出库与确认收货写接口
 - `GET /api/public/trace/:traceCode`：匿名、已审核且种植机构启用的批次白名单，只读限流，不返回账号/详细地址/备注/附件/审计/AI 数据；公开页面与二维码入口已本地接入，完整详情仍鉴权
-- 124 项鉴权、批次、AI 风险分析、资料问答、通知、AI/人工会话、看板、公开溯源与收货归属后端自动化测试（内存数据/模拟模型，不修改 PostgreSQL、不消耗 AI 费用）
+- 当前 130 项鉴权、批次、AI 风险分析、资料问答、通知、AI/人工会话、看板、公开溯源、收货归属及生产配置后端自动化测试（内存数据/模拟模型，不修改 PostgreSQL、不消耗 AI 费用）
 
 ### AI 风险审核助手
 
@@ -242,6 +251,16 @@
 - Cloudflare Pages：前端静态站点
 - GitHub：代码托管与自动部署触发
 
+### 生产配置准备（第二十五刀本地完成，未上线）
+
+- `src/config/apiConfig.ts` 纯函数同时供应用和 Vite 使用；只接受 API/demo、同源 `/api` 或以 `/api` 结尾的完整接口地址，生产跨域必须 HTTPS。非法配置在构建前失败，不自动退回 demo
+- 前端只读取公开 `VITE_*`；构建额外阻止 `VITE_DEEPSEEK_API_KEY`、`VITE_DATABASE_URL`、`VITE_JWT_SECRET` 三种常见误配置，不能据此宣称任意密钥都能自动识别。私密值一律在后端
+- 后端生产要求显式 HTTPS `CLIENT_ORIGIN` 和有效 JWT 密钥，校验 PostgreSQL URL 与端口；来源正规化后同时供 HTTP/Socket 使用。CORS 不替代认证，Bearer 预检与 Retry-After 读取已验证
+- `TRUST_PROXY` 默认 off；只支持已核对的 IP/CIDR 或 loopback，拒绝全信任、跳数与 /0。平台拓扑/转发头/直连隔离须上线时核对，当前限流和 Socket 广播仍只适合单实例 MVP
+- Pages 静态资源重写补齐目标路径、增加 assets 规则，保留页面 SPA 回落；Vite 开发代理不会随 dist 上线。准备路线为 Pages 前端 + 独立 HTTPS Node 后端，实际平台/数据库公网方案另确认
+- 前端当前 135 项、后端 130 项回归，类型/lint、demo/隔离 HTTPS API 构建、后端 build 与 19 路由 bundle 预算通过；登录静态 JS gzip 两模式均约 315 KB（十进制）。假私密变量标记未进入所测 API 产物，未读取真实 Key 做扫描
+- 本刀只做配置与本地 HTTP 验证；未部署、未验收生产 SSE/Socket/微信，未操作数据库、seed/reset 或调用真实模型。后续按外层 `Cloudflare部署指南.md` 核对实际部署
+
 ## 当前数据架构
 
 ```text
@@ -259,7 +278,7 @@ API 模式下，批次列表、列表点击详情、扫码/输码查询和直接
 ## 项目目录
 
 ```text
-liangmuMedicine/
+LiangmuTrace/
 ├─ public/                 # 静态资源、药材图片和 JSON 样例数据
 ├─ src/
 │  ├─ components/         # 公共组件、扫码与溯源组件
@@ -296,16 +315,18 @@ npm run dev
 | --- | --- |
 | `.env.development` | `npm run dev` 使用 `VITE_AUTH_MODE=api` |
 | `.env.production` | `npm run build` 使用 `VITE_AUTH_MODE=demo`，可静态部署 |
-| `.env.example` | 本地覆盖模板，按需复制为不提交的 `.env.local` |
+| `.env.example` | 本地开发覆盖模板，按需复制为不提交的 `.env.development.local` |
 
-只体验前端时，在 `.env.local` 设置 `VITE_AUTH_MODE=demo` 后重启 Vite。该文件也会覆盖生产构建配置，构建前应检查它。正式接后端部署时需设置 `VITE_AUTH_MODE=api` 和 `VITE_API_BASE_URL`，并提供同源 `/api` 反向代理或正确的跨域配置；不能仅依赖开发代理。`VITE_*` 会进入浏览器构建产物，禁止填写数据库密码、JWT 密钥或 AI Key。
+只体验前端时，在 `.env.development.local` 设置 `VITE_AUTH_MODE=demo` 后重启 Vite。生产覆盖用 `.env.production.local` 或平台构建环境变量；模式专用文件优先于通用 `.env.local`，进程环境变量优先级最高，不能误认为 `.env.local` 总会覆盖 `.env.production`。[Vite 配置优先级](https://vite.dev/guide/env-and-mode)
+
+正式接后端时需配置 `VITE_AUTH_MODE=api` 和 HTTPS `VITE_API_BASE_URL=https://<后端域名>/api`；若使用同源 `/api`，必须自行提供真实反向代理，不能仅依赖开发代理。`VITE_*` 会进入浏览器构建产物，禁止填写数据库密码、JWT 密钥或 AI Key。当前 `.env.production` 保持 demo，尚未切换公网真实服务。
 
 ### 2. 准备 PostgreSQL
 
 本地创建数据库：
 
 ```text
-liangmu_medicine
+liangmu_trace
 ```
 
 复制后端环境变量模板：
@@ -332,7 +353,7 @@ npm run dev
 
 健康检查：<http://localhost:4000/api/health>
 
-开发环境未配置 `JWT_SECRET` 时使用进程级随机密钥，重启后旧 Token 失效，需要重新登录。生产环境必须设置 `NODE_ENV=production` 和至少 32 字符的随机 `JWT_SECRET`。接口契约与错误码见 [后端 README](server/README.md)。
+开发环境未配置 `JWT_SECRET` 时使用进程级随机密钥，重启后旧 Token 失效，需要重新登录。生产环境必须设置 `NODE_ENV=production`、显式 HTTPS `CLIENT_ORIGIN` 和至少 32 字符的随机 `JWT_SECRET`；可信代理默认关闭，上线按实际网关核对。接口契约与错误码见 [后端 README](server/README.md)。
 
 ## 演示账号
 
@@ -370,7 +391,9 @@ npm run check:bundle
 
 第二十二刀底座新增 `tests/publicTrace.test.mjs` 的 6 项白名单契约、离线适配和输码校验回归；第一组查询测试的 7 项令基线达到 99。第二组 `tests/publicTracePage.test.mjs` 新增 7 项页面状态、白名单展示、上海时间、公开/私有路由树和分享 URL 回归；查询测试再补 1 项退出不中断匿名读取，该阶段共 107 项通过。公开页及新二维码链接已接入，真实本机 API 浏览器已验证查询、异常输入、登录跳转与窄屏；没有实际摄像头/微信验收。SSR 测试使用专用查询/认证快照与 MemoryRouter，不证明浏览器 Effect 或布局。静态 demo 的原始 JSON 可下载，只能装演示数据；服务端白名单才是真实 API 的字段边界。
 
-第二十三刀底座另增 `tests/batchDispatchSupport.test.mjs` 的 5 项辅助回归；第一组 `tests/dispatchRecipients.test.mjs` 的 7 项认证候选/响应校验/错误不降级/取消、收货 DTO、Query 隔离/启用/不重试及 demo 归属回归令基线达到 119。第二组再补 5 项实际数据源/mutation/demo 写入测试和 `tests/batchDispatchPage.test.mjs` 的 3 项采购商交互回归，当前完整前端 **127 项**、后端 **124 项**通过；TypeScript、ESLint、默认 demo/隔离 API 构建及 19 路由 bundle 预算、后端 typecheck/build 通过。SSR 验证按钮/回调/同步锁与身份保护，不证明真实布局或 Effect；本机真实 API/PostgreSQL 浏览器另验收选择出库、跨组织仅浏览、所属收货/刷新、旧未分配无按钮。4 个临时组织、3 个账号、2 个批次及级联记录已精确清理，无 seed/reset 或 AI 调用。浏览器静态 Modal/message 主题上下文警告列入前端收尾，不声称手机/微信或生产代理已验证。
+第二十三刀底座另增 `tests/batchDispatchSupport.test.mjs` 的 5 项辅助回归；第一组 `tests/dispatchRecipients.test.mjs` 的 7 项认证候选/响应校验/错误不降级/取消、收货 DTO、Query 隔离/启用/不重试及 demo 归属回归令基线达到 119。第二组再补 5 项实际数据源/mutation/demo 写入测试和 `tests/batchDispatchPage.test.mjs` 的 3 项采购商交互回归，当时完整前端 **127 项**、后端 **124 项**通过；TypeScript、ESLint、默认 demo/隔离 API 构建及 19 路由 bundle 预算、后端 typecheck/build 通过。SSR 验证按钮/回调/同步锁与身份保护，不证明真实布局或 Effect；本机真实 API/PostgreSQL 浏览器另验收选择出库、跨组织仅浏览、所属收货/刷新、旧未分配无按钮。4 个临时组织、3 个账号、2 个批次及级联记录已精确清理，无 seed/reset 或 AI 调用。当时的静态 Modal/message 主题警告由第二十四刀处理，不声称手机/微信或生产代理已验证。
+
+第二十四刀 `tests/engineering.test.mjs` 新增 3 项上下文实例/主题读取、根层级与静态调用 AST、阶段术语/历史事件/轮播文案回归；既有旧属性检查加入 Timeline，采购商测试替身适配 useApp，新 demo 收货事件补术语断言。当前完整前端 **130 项**、后端 **124 项**，类型/lint、两种前端生产构建与 19 路由预算、后端 typecheck/build 均通过。App 上下文增加少量共享体积，完整登录静态 JS gzip 约 demo 313 KB / API 310 KB，仍低于 400 KB 预算；旧工程化对比表保留第二十一刀当时数据，不当作当前精确值。SSR 不证明真实布局/卸载 Effect，桌面与 375px 核心交互另做上述浏览器验收。
 
 后端：
 
@@ -387,7 +410,7 @@ npm run prisma:validate
 1. 第十六刀已完成本地持久化/受限多轮验收；保留延迟取消、UUID 去重、身份/批次版本隔离回归，后续补更多演示药材与问题，不冒充全量知识库或生产准确率
 2. 第十七刀真实看板与第十八刀真实个人资料/角色导航均已完成；继续清理演示会经过的少量失效入口，不扩展无后端支撑的假操作
 3. 第十九刀核心通知与第二十刀最小人工聊天已完成；保持内部协作/客服权限及去重回归，关注关系和剩余阶段通知按演示价值后置，不扩展复杂 IM
-4. 第二十一刀首轮工程化、第二十二刀匿名白名单溯源、第二十三刀收货归属已本地完成；下一步收尾弹窗主题上下文、演示文案与移动端，再准备真实后端部署并验证 SSE/Socket 代理、微信/摄像头/移动真机。真实文件存储后置
+4. 第二十一至二十四刀本地工程化、匿名溯源、收货归属及核心界面收尾已完成；第二十五刀生产配置、CORS/可信代理与部署指南已本地验证。下一步先确认平台/费用与数据库公网方案，再执行已授权的上线步骤、生产 SSE/Socket 与微信/摄像头/移动真机验收。Vite 开发代理和桌面窄屏不是公网/真机验收，真实文件存储后置
 5. 整理 README 展示、演示视频和面试问答；第一版订单及模拟/真实支付均后置
 
 ## 当前限制

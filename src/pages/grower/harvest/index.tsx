@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  App as AntdApp,
   Breadcrumb,
   Button,
   Card,
@@ -11,7 +12,6 @@ import {
   Space,
   Table,
   Typography,
-  message,
   theme,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -91,6 +91,7 @@ function collectHarvests(batch: HerbBatch): HarvestRow[] {
 }
 
 export default function GrowerHarvestListPage() {
+  const { message } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()

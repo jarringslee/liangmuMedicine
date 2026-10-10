@@ -129,6 +129,16 @@
   margin: -4px -8px;
   border-radius: 8px;
   transition: background 0.2s;
+  // 原生 button 清除浏览器默认边框/背景，避免姓名撑出默认按钮。
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.buyer-herbs__user-info {
+  max-width: 140px;
+  overflow-wrap: anywhere;
 }
 
 .buyer-herbs__user-trigger:hover {
@@ -136,6 +146,20 @@
 }
 
 @media (max-width: 575px) {
+  .buyer-herbs__header {
+    padding: 12px !important;
+  }
+
+  .buyer-herbs__header-actions {
+    // 操作区独占一行，不挤压品牌标题或把姓名压成竖排。
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .buyer-herbs__header-actions > .ant-space-item {
+    flex-shrink: 0;
+  }
+
   .buyer-herbs__toolbar {
     padding: 12px;
   }

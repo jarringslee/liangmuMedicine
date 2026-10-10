@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  App as AntdApp,
   Avatar,
   Breadcrumb,
   Button,
@@ -15,9 +16,7 @@ import {
   Space,
   Spin,
   Typography,
-  message,
   theme,
-  Modal,
 } from 'antd'
 import {
   EnvironmentOutlined,
@@ -74,6 +73,7 @@ function formatOrigin(b: HerbBatch): string {
 }
 
 export default function BuyerHerbsPage() {
+  const { message, modal } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
@@ -82,9 +82,10 @@ export default function BuyerHerbsPage() {
   const { confirmReceipt: receiptMutation } = useHerbBatchMutations()
 
   const receiptLock = useRef(false)
-  const receiptDialog = useRef<ReturnType<typeof Modal.confirm> | null>(null)
+  const receiptDialog =
+    useRef<ReturnType<typeof modal.confirm> | null>(null)
 
-  // 静态确认框不随页面自动卸载；只清理本页创建的实例。
+  // 确认框由全局上下文创建；离开页面或身份改变时，只清理本页实例。
   useEffect(() => () => {
     receiptDialog.current?.destroy()
     receiptDialog.current = null
@@ -178,7 +179,7 @@ export default function BuyerHerbsPage() {
       return
     }
 
-    const dialog = Modal.confirm({
+    const dialog = modal.confirm({
       title: '确认收到该药材批次？',
       content: `批次：${batch.batchNo} · ${batch.herbName}`,
       okText: '确认收货',
@@ -198,15 +199,15 @@ export default function BuyerHerbsPage() {
 
   return (
     <Layout className="admin-dashboard">
-      <Header className="admin-dashboard__header">
-        <Flex align="center" justify="space-between" style={{ width: '100%' }}>
+      <Header className="admin-dashboard__header buyer-herbs__header">
+        <Flex className="buyer-herbs__header-inner" align="center" justify="space-between" wrap gap="middle" style={{ width: '100%' }}>
           <Space size="middle" wrap>
             <MedicineBoxOutlined style={{ fontSize: 22, color: token.colorPrimary }} />
             <Title level={4} style={{ margin: 0 }}>
               良木药谷 · 采购商端
             </Title>
           </Space>
-          <Space size="large">
+          <Space className="buyer-herbs__header-actions" size="middle" wrap>
             <MessageBell />
             <Button
               type="primary"
@@ -240,7 +241,7 @@ export default function BuyerHerbsPage() {
               <button type="button" className="buyer-herbs__user-trigger">
                 <Space>
                   <Avatar style={{ backgroundColor: token.colorPrimary }} icon={<UserOutlined />} />
-                  <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
+                  <div className="buyer-herbs__user-info" style={{ lineHeight: 1.2, textAlign: 'left' }}>
                     <div>
                       <Text strong>{session?.displayName ?? '—'}</Text>
                     </div>

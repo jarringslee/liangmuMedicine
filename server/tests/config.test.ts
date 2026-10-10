@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict'
+import { once } from 'node:events'
+import type { AddressInfo } from 'node:net'
+import { after, test } from 'node:test'
+import express from 'express'
+import { rateLimit } from 'express-rate-limit'
+
+// 独立假配置，HTTP 烟测只访问预检/未认证路由和测试探针，不接数据库/模型。
+process.env.NODE_ENV = 'test'
+process.env.CLIENT_ORIGIN = 'http://localhost:5173'
+process.env.TRUST_PROXY = 'off'
+process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:1/test'
+process.env.JWT_SECRET = 'config-test-only-secret-0123456789abcdef'
+const { env, envSchema } = await import('../src/config/env.js')
+const { createApp } = await import('../src/app.js')
+const { prisma } = await import('../src/lib/prisma.js')
+const app = createApp()
+const server = app.listen(0, '127.0.0.1')
+await once(server, 'listening')
+const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+after(async () => {
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  await prisma.$disconnect()
+})
+const valid = { DATABASE_URL: process.env.DATABASE_URL, NODE_ENV: 'production',
+  CLIENT_ORIGIN: 'https://frontend.example.test', JWT_SECRET: process.env.JWT_SECRET }
+
+test('生产要求 HTTPS 前端源与足够长的 JWT 密钥，开发默认仍可启动', () => {
+  assert.equal(envSchema.safeParse(valid).success, true)
+  for (const override of [{ CLIENT_ORIGIN: undefined }, { CLIENT_ORIGIN: 'http://frontend.example.test' },
+    { JWT_SECRET: '' }, { JWT_SECRET: 'short' }]) {
+    assert.equal(envSchema.safeParse({ ...valid, ...override }).success, false)
+  }
+  assert.equal(envSchema.safeParse({ DATABASE_URL: valid.DATABASE_URL }).success, true)
+})
+
+test('前端源正规化，拒绝路径/凭证/查询/非网页协议和多源；数据库与端口有边界', () => {
+  assert.equal(envSchema.parse({ ...valid, CLIENT_ORIGIN: ' https://FRONTEND.example.test:443/ ' }).CLIENT_ORIGIN,
+    'https://frontend.example.test')
+  for (const CLIENT_ORIGIN of ['', 'broken', '*', 'https://a.test,https://b.test', 'file:///local',
+    'https://user:password@a.test', 'https://a.test/path', 'https://a.test?query=1', 'https://a.test#hash']) {
+    assert.equal(envSchema.safeParse({ ...valid, CLIENT_ORIGIN }).success, false)
+  }
+  for (const DATABASE_URL of ['', 'broken', 'mysql://user:pass@localhost/db', 'postgresql://localhost/']) {
+    assert.equal(envSchema.safeParse({ ...valid, DATABASE_URL }).success, false)
+  }
+  for (const PORT of [0, 65536, 'not-a-port']) assert.equal(envSchema.safeParse({ ...valid, PORT }).success, false)
+  assert.equal(envSchema.safeParse({ ...valid, PORT: '4000', DATABASE_URL: 'postgres://localhost/database' }).success, true)
+})
+
+test('可信代理默认关闭，支持明确 IP/CIDR；拒绝全信任、跳数、/0 与非法值', () => {
+  assert.equal(envSchema.parse(valid).TRUST_PROXY, false)
+  assert.deepEqual(envSchema.parse({ ...valid, TRUST_PROXY: ' loopback,192.0.2.5,2001:db8::/64 ' }).TRUST_PROXY,
+    ['loopback', '192.0.2.5', '2001:db8::/64'])
+  for (const TRUST_PROXY of ['', 'true', 'false', '1', '*', 'unknown', '192.0.2.1,',
+    '0.0.0.0/0', '::/0', '192.0.2.1/33', '::1/129', '::1/-1', '192.0.2.1/24/1']) {
+    assert.equal(envSchema.safeParse({ ...valid, TRUST_PROXY }).success, false)
+  }
+  assert.equal(app.get('trust proxy'), false)
+})
+
+test('允许真实前端源的 Bearer 预检；非允许来源无 CORS 许可，不开启 Cookie 凭证', async () => {
+  const response = await fetch(`${base}/api/batches`, { method: 'OPTIONS', headers: {
+    Origin: env.CLIENT_ORIGIN, 'Access-Control-Request-Method': 'POST',
+    'Access-Control-Request-Headers': 'authorization,content-type',
+  } })
+  assert.equal(response.status, 204)
+  assert.equal(response.headers.get('access-control-allow-origin'), env.CLIENT_ORIGIN)
+  assert.match(response.headers.get('access-control-allow-headers')!, /Authorization/)
+  assert.equal(response.headers.get('access-control-allow-credentials'), null)
+  const denied = await fetch(`${base}/api/batches`, { headers: { Origin: 'https://other.example.test' } })
+  assert.equal(denied.headers.get('access-control-allow-origin'), null)
+  assert.equal(denied.status, 401)
+})
+
+test('CORS 与无 Origin 都不能绕过认证；跨域客户端可读取 Retry-After', async () => {
+  const response = await fetch(`${base}/api/batches`, { headers: { Origin: env.CLIENT_ORIGIN } })
+  assert.equal(response.status, 401)
+  assert.equal(response.headers.get('access-control-expose-headers'), 'Retry-After')
+  assert.equal((await fetch(`${base}/api/batches`)).status, 401)
+})
+
+test('真实 HTTP IP 限流：关闭代理时忽略伪造 XFF，可信代理只采信最近非可信地址', async () => {
+  const original = env.TRUST_PROXY
+  try {
+    for (const proxy of ['off', 'loopback']) {
+      env.TRUST_PROXY = envSchema.parse({ ...valid, TRUST_PROXY: proxy }).TRUST_PROXY
+      // 从实际工厂读取配置；探针仅验证 Express IP 推导与限流，不连接业务数据库。
+      const productionApp = createApp()
+      const probe = express()
+      probe.set('trust proxy', productionApp.get('trust proxy'))
+      probe.use(rateLimit({ windowMs: 60_000, limit: 2,
+        validate: { xForwardedForHeader: false }, // off 是本次有意测试的安全默认配置。
+      }))
+      probe.get('/ip', (req, res) => res.json({ ip: req.ip }))
+      const probeServer = probe.listen(0, '127.0.0.1')
+      await once(probeServer, 'listening')
+      const url = `http://127.0.0.1:${(probeServer.address() as AddressInfo).port}/ip`
+      try {
+        for (let index = 0; index < 2; index++) {
+          const result = await fetch(url, { headers: { 'X-Forwarded-For': `203.0.113.${index + 1}, 198.51.100.5` } })
+          assert.equal(result.status, 200)
+          assert.equal((await result.json()).ip, proxy === 'off' ? '127.0.0.1' : '198.51.100.5')
+        }
+        const limited = await fetch(url, { headers: { 'X-Forwarded-For': '203.0.113.9, 198.51.100.5' } })
+        assert.equal(limited.status, 429)
+        assert.ok(limited.headers.get('retry-after'))
+      } finally {
+        await new Promise<void>((resolve, reject) => probeServer.close((error) => error ? reject(error) : resolve()))
+      }
+    }
+  } finally { env.TRUST_PROXY = original }
+})

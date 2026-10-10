@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  App as AntdApp,
   Button,
   Drawer,
   Empty,
@@ -12,7 +13,6 @@ import {
   Tag,
   Typography,
   Upload,
-  message,
 } from 'antd'
 import type { RcFile } from 'antd/es/upload'
 import {
@@ -41,6 +41,7 @@ type Props = {
 type TabKey = 'live' | 'image' | 'manual'
 
 export default function QrScanDrawer({ open, onClose, onResult }: Props) {
+  const { message } = AntdApp.useApp()
   const [active, setActive] = useState<TabKey>('live')
 
   const handleHit = useCallback(
@@ -54,7 +55,7 @@ export default function QrScanDrawer({ open, onClose, onResult }: Props) {
       setActive('live')
       onResult(code)
     },
-    [onResult],
+    [onResult, message],
   )
 
   const handleClose = useCallback(() => {
@@ -425,6 +426,7 @@ function ImageScanTab({ onHit }: { onHit: (raw: string) => void }) {
 /* ------------------------------ 手动输入 ------------------------------- */
 
 function ManualInputTab({ onHit }: { onHit: (raw: string) => void }) {
+  const { message } = AntdApp.useApp()
   const [value, setValue] = useState('')
 
   const previewCode = useMemo(() => extractTraceCode(value), [value])

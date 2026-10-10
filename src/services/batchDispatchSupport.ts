@@ -56,7 +56,7 @@ function transition(batch: HerbBatch, toStage: 'shipped' | 'sold', actor: AuthSe
   const at = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit',
     day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date())
   const event: BatchEvent = { id: crypto.randomUUID(), type: 'stageChange',
-    title: toStage === 'shipped' ? '阶段变更：仓储 → 已出库' : '阶段变更：已出库 → 已售',
+    title: toStage === 'shipped' ? '阶段变更：仓储 → 已出库' : '阶段变更：已出库 → 已收货',
     description: toStage === 'shipped' ? '管理员已确认出库，批次进入运输环节。' : '采购商已确认收货，批次完成本次流转。',
     occurredAt: at, operatorName: actor.displayName, operatorRole: actor.role, scopes: ['public'],
     fromStage: batch.stage, toStage }

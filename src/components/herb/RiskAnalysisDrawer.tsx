@@ -8,6 +8,7 @@
 
 import { useEffect } from 'react'
 import {
+    App as AntdApp,
     Alert,
     Button,
     Divider,
@@ -21,7 +22,6 @@ import {
     Tag,
     Timeline,
     Typography,
-    message,
 } from 'antd'
 import { RobotOutlined } from '@ant-design/icons'
 import { useBatchRiskAnalysis } from '../../hooks/useBatchRiskAnalysis'
@@ -45,6 +45,7 @@ export default function RiskAnalysisDrawer({
     batch,
     onClose,
 }: Props) {
+    const { message } = AntdApp.useApp()
     const [form] = Form.useForm<RiskReviewInput>()
     const {
         query,

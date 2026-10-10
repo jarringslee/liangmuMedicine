@@ -9,12 +9,14 @@ import { MemoryRouter } from 'react-router-dom'
 import { createServer } from 'vite'
 import ts from 'typescript'
 import { collectStaticFiles } from '../scripts/check-bundle.mjs'
+import { App as AntdApp, ConfigProvider, message as staticMessage, Modal, theme } from 'antd'
 
 let vite, PageLoading, PageErrorBoundary, RequireAuth, authFixture
 before(async () => {
   vite = await createServer({
     cacheDir: 'node_modules/.vite-tests/engineering',
     server: { middlewareMode: true, hmr: false, watch: null },
+    ssr: { noExternal: ['@ant-design/icons', '@ant-design/icons-svg', '@rc-component/util'] },
     optimizeDeps: { noDiscovery: true, include: [] }, logLevel: 'silent',
     plugins: [{
       name: 'engineering-auth-fixture', enforce: 'pre',
@@ -129,10 +131,90 @@ test('图表没有全量 ECharts 引入，JSX 不再使用本刀清理的旧组�
             (['Drawer', 'Modal'].includes(component) && name === 'destroyOnClose') ||
             (component === 'Drawer' && name === 'width')
           assert.equal(deprecated, false, `${file}: ${component}.${name}`)
+          if (component === 'Timeline' && name === 'mode' && attr.initializer && ts.isStringLiteral(attr.initializer)) {
+            assert.ok(!['left', 'right'].includes(attr.initializer.text), `${file}: Timeline.mode 使用 start/end`)
+          }
+          if (component === 'Timeline' && name === 'items' && attr.initializer) {
+            function checkItem(item) {
+              if (ts.isPropertyAssignment(item)) {
+                assert.ok(!['children', 'dot'].includes(item.name.getText(ast)), `${file}: Timeline.items 使用 content/icon`)
+              }
+              ts.forEachChild(item, checkItem)
+            }
+            checkItem(attr.initializer)
+          }
         }
       }
       ts.forEachChild(node, visit)
     }
     visit(ast)
   }
+})
+
+test('AntdApp 为子组件提供实际提示/弹窗实例并读取上层主题，不使用静态实例', () => {
+  let instances
+  function Probe() {
+    instances = AntdApp.useApp()
+    const { token } = theme.useToken()
+    return createElement('p', null, token.colorPrimary)
+  }
+  const html = renderToString(createElement(ConfigProvider, { theme: { token: { colorPrimary: '#315a42' } } },
+    createElement(AntdApp, null, createElement(Probe))))
+  assert.match(html, /#315a42/)
+  assert.equal(typeof instances.message.success, 'function')
+  assert.equal(typeof instances.modal.confirm, 'function')
+  assert.notEqual(instances.message, staticMessage)
+  assert.notEqual(instances.modal.confirm, Modal.confirm)
+  // SSR 只证明上下文/实例读取；弹窗行为与主题警告另由真实浏览器检查。
+})
+
+test('根部上下文层级正确，业务组件不直接调用 antd 静态提示/确认函数', () => {
+  const app = readFileSync('src/App.tsx', 'utf8')
+  assert.match(app, /<ConfigProvider[^>]*>\s*<AntdApp>\s*<BrowserRouter>/)
+  assert.doesNotMatch(app, /<AntdApp[^>]*component=\{false\}/)
+  const walk = (directory) => readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? walk(join(directory, entry.name)) : entry.name.endsWith('.tsx') ? [join(directory, entry.name)] : [])
+  for (const file of walk('src')) {
+    const ast = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+    const forbidden = new Map()
+    for (const node of ast.statements) {
+      if (!ts.isImportDeclaration(node) || node.moduleSpecifier.text !== 'antd') continue
+      const bindings = node.importClause?.namedBindings
+      if (!bindings || !ts.isNamedImports(bindings)) continue
+      for (const spec of bindings.elements) {
+        const imported = (spec.propertyName ?? spec.name).text
+        if (['message', 'notification', 'Modal'].includes(imported)) forbidden.set(spec.name.text, imported)
+      }
+    }
+    function visit(node) {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const { expression, name } = node.expression
+        if (ts.isIdentifier(expression) && forbidden.has(expression.text)) {
+          const allowed = ['useMessage', 'useNotification', 'useModal'].includes(name.text)
+          assert.ok(allowed, `${file}: 请使用上下文实例，而非 ${expression.text}.${name.text}`)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(ast)
+  }
+})
+
+test('sold 仅改变展示语义，受控阶段标题适配旧记录，普通备注保持原文', async () => {
+  const { STAGE_LABEL } = await vite.ssrLoadModule('/src/types/herb.ts')
+  const Timeline = (await vite.ssrLoadModule('/src/components/herb/TraceTimeline.tsx')).default
+  const { welcomeSlides } = await vite.ssrLoadModule('/src/mock/login/welcomeSlides.ts')
+  assert.equal(STAGE_LABEL.sold, '已收货')
+  assert.deepEqual(Object.keys(STAGE_LABEL), ['planting', 'harvested', 'processing', 'warehousing', 'shipped', 'sold'])
+  const event = { id: 'legacy', type: 'stageChange', title: '阶段变更：已出库 → 已售',
+    fromStage: 'shipped', toStage: 'sold', occurredAt: '2026-10-09 12:00:00', scopes: ['public'] }
+  const html = renderToString(createElement(Timeline, { role: 'buyer', events: [event] }))
+  assert.match(html, /已收货/); assert.doesNotMatch(html, /已售/)
+  assert.equal(event.title, '阶段变更：已出库 → 已售')
+  const note = renderToString(createElement(Timeline, { role: 'buyer', events: [{ ...event, type: 'note', title: '旧术语“已售”说明' }] }))
+  assert.match(note, /旧术语“已售”说明/)
+  const copy = welcomeSlides.flatMap((slide) => slide.paragraphs).join(' ')
+  assert.doesNotMatch(copy, /GMP|温湿度|气象|土壤|设备|合同|监管接口|质量认证要求/)
+  assert.match(copy, /药材列表、溯源码或二维码/)
+  assert.match(copy, /静态 demo/)
 })

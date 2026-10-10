@@ -9,7 +9,7 @@ healthRouter.get('/health', async (_req, res) => {
 
     res.json({
       status: 'ok',
-      service: 'liangmuMedicine API',
+      service: 'LiangmuTrace API',
       database: 'connected',
       timestamp: new Date().toISOString(),
     })
@@ -17,7 +17,7 @@ healthRouter.get('/health', async (_req, res) => {
     console.error('Database health check failed', error)
     res.status(503).json({
       status: 'degraded',
-      service: 'liangmuMedicine API',
+      service: 'LiangmuTrace API',
       database: 'unavailable',
       timestamp: new Date().toISOString(),
     })

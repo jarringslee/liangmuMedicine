@@ -61,7 +61,7 @@ type Props = {
   reverse?: boolean
   /** 仅取前 N 条（在倒序后截取） */
   limit?: number
-  mode?: TimelineProps['mode']
+  mode?: Exclude<TimelineProps['mode'], 'left' | 'right'>
   /** 空数据时的描述文案 */
   emptyDescription?: string
 }
@@ -71,7 +71,7 @@ export default function TraceTimeline({
   role,
   reverse = true,
   limit,
-  mode = 'left',
+  mode = 'start',
   emptyDescription = '暂无链路事件',
 }: Props) {
   const visible = useMemo(() => {
@@ -91,19 +91,23 @@ export default function TraceTimeline({
       mode={mode}
       items={visible.map((e) => ({
         color: EVENT_COLOR[e.type],
-        dot: EVENT_ICON[e.type] as React.ReactNode,
-        children: <EventCard event={e} />,
+        icon: EVENT_ICON[e.type] as React.ReactNode,
+        content: <EventCard event={e} />,
       }))}
     />
   )
 }
 
 function EventCard({ event }: { event: BatchEvent }) {
+  // 受控阶段事件按当前阶段字典展示，不回写历史记录中的旧“已售”标题。
+  const title = event.type === 'stageChange' && event.fromStage && event.toStage
+    ? `阶段变更：${STAGE_LABEL[event.fromStage]} → ${STAGE_LABEL[event.toStage]}`
+    : event.title
   return (
     <div>
       <div className="trace-timeline__event-title">
         <Tag variant="filled">{EVENT_TYPE_LABEL[event.type]}</Tag>
-        <span>{event.title}</span>
+        <span>{title}</span>
         {event.fromStage && event.toStage ? (
           <Tag color="purple" variant="filled">
             {STAGE_LABEL[event.fromStage]} → {STAGE_LABEL[event.toStage]}

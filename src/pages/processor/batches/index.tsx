@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  App as AntdApp,
   Breadcrumb,
   Button,
   Card,
@@ -13,7 +14,6 @@ import {
   Table,
   Typography,
   Upload,
-  message,
   theme,
 } from 'antd'
 import type { UploadFile } from 'antd'
@@ -69,6 +69,7 @@ function readAsDataUrl(file: File): Promise<string> {
 }
 
 export default function ProcessorBatchesPage() {
+  const { message, modal } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
@@ -137,7 +138,7 @@ export default function ProcessorBatchesPage() {
   }
 
   const confirmReceive = (row: HerbBatch) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认接收该批次进入加工？',
       content: `批次：${row.batchNo} · ${row.herbName}`,
       okText: '确认接收',

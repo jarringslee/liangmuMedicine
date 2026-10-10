@@ -1,11 +1,11 @@
 import {
+  App as AntdApp,
   Breadcrumb,
   Button,
   Card,
   Descriptions,
   Flex,
   Layout,
-  Modal,
   Space,
   Typography,
   theme,
@@ -34,6 +34,7 @@ function organizationLabel(role: UserRole): string {
 }
 
 export default function ProfilePage() {
+  const { modal } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session, logout } = useAuth()
@@ -44,7 +45,7 @@ export default function ProfilePage() {
   const navigation = getRoleNavigation(session.role)
 
   const confirmLogout = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '退出当前账号？',
       content: '退出后将返回登录页，可以重新选择其他账号。',
       okText: '退出登录',

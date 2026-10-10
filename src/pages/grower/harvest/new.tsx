@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  App as AntdApp,
   Alert,
   Breadcrumb,
   Button,
@@ -15,7 +16,6 @@ import {
   Space,
   Typography,
   Upload,
-  message,
   theme,
 } from 'antd'
 import type { UploadFile } from 'antd'
@@ -64,6 +64,7 @@ function readAsDataUrl(file: File): Promise<string> {
 const MAX_PHOTOS = 4
 
 export default function GrowerHarvestNewPage() {
+  const { message } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()

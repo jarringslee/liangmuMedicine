@@ -6,6 +6,7 @@ import {
 } from 'react'
 import {
   Alert,
+  App as AntdApp,
   Breadcrumb,
   Button,
   Card,
@@ -15,14 +16,12 @@ import {
   Empty,
   Flex,
   Layout,
-  Modal,
   Result,
   Row,
   Space,
   Spin,
   Tag,
   Typography,
-  message,
   theme,
 } from 'antd'
 import {
@@ -115,6 +114,7 @@ function isRealAttachmentUrl(url: string): boolean {
 }
 
 export default function TraceDetailPage() {
+  const { message, modal } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const location = useLocation()
@@ -151,7 +151,7 @@ export default function TraceDetailPage() {
 
   const handleAudit = async (next: AuditDecision) => {
     if (!batch) return
-    Modal.confirm({
+    modal.confirm({
       title: `确认将该批次置为「${AUDIT_LABEL[next]}」？`,
       content: `${batch.batchNo} · ${batch.herbName}`,
       okText: '确认',
@@ -330,6 +330,7 @@ function BatchView({
       ? '该批次尚未通过审核，仅展示有限信息。'
       : null
 
+  const { message } = AntdApp.useApp()
   const attachments = useMemo(() => collectAttachments(batch, role), [batch, role])
 
   return (

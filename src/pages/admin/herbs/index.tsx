@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  App as AntdApp,
   Breadcrumb,
   Button,
   Card,
@@ -13,7 +14,6 @@ import {
   Space,
   Table,
   Typography,
-  message,
   theme,
   Alert,
 } from 'antd'
@@ -74,6 +74,7 @@ const AUDIT_OPTIONS: { value: AuditStatus | 'all'; label: string }[] = [
 ]
 
 export default function AdminHerbsPage() {
+  const { message, modal } = AntdApp.useApp()
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const { session } = useAuth()
@@ -174,7 +175,7 @@ export default function AdminHerbsPage() {
       message.info(`当前已是「${AUDIT_LABEL[next]}」状态`)
       return
     }
-    Modal.confirm({
+    modal.confirm({
       title: `确认将该批次置为「${AUDIT_LABEL[next]}」？`,
       content: `批次：${row.batchNo} · ${row.herbName}`,
       okText: '确认',

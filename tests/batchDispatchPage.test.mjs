@@ -51,6 +51,7 @@ before(async () => {
           } }
           export const message = Object.fromEntries(['success', 'error', 'warning'].map((kind) =>
             [kind, (text) => fixture.messages.push({ kind, text })]))
+          export const App = { useApp: () => ({ message, modal: Modal }) }
           export const MessageBell = () => null
           export const EnvironmentOutlined = () => null, EyeOutlined = () => null, LogoutOutlined = () => null,
             MedicineBoxOutlined = () => null, ScanOutlined = () => null, ShopOutlined = () => null,

@@ -12,7 +12,7 @@ const server = createServer(app)
 const io = attachNotificationRealtime(server, auth)
 
 server.listen(env.PORT, () => {
-  console.log(`liangmuMedicine API listening on http://localhost:${env.PORT}`)
+  console.log(`LiangmuTrace API listening on http://localhost:${env.PORT}`)
 })
 
 let shuttingDown = false

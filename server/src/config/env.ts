@@ -42,6 +42,10 @@ export const envSchema = z.object({
       return ['postgres:', 'postgresql:'].includes(url.protocol) && Boolean(url.hostname) && url.pathname.length > 1
     } catch { return false }
   }, 'DATABASE_URL must be a PostgreSQL connection URL with a host and database name'),
+  // 单实例演示先限制连接数；连接池等待必须有上限，不能因云库断连一直挂起。
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(20).default(2),
+  DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
+  DB_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
   DEEPSEEK_API_KEY: z.string().trim().optional(),
   DEEPSEEK_MODEL: z.string().trim().min(1).default('deepseek-flash'),
   JWT_SECRET: z.preprocess(

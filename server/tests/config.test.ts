@@ -13,7 +13,7 @@ process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:1/test'
 process.env.JWT_SECRET = 'config-test-only-secret-0123456789abcdef'
 const { env, envSchema } = await import('../src/config/env.js')
 const { createApp } = await import('../src/app.js')
-const { prisma } = await import('../src/lib/prisma.js')
+const { prisma, createPrismaPoolConfig, createPrismaTransactionOptions } = await import('../src/lib/prisma.js')
 const app = createApp()
 const server = app.listen(0, '127.0.0.1')
 await once(server, 'listening')
@@ -46,6 +46,44 @@ test('前端源正规化，拒绝路径/凭证/查询/非网页协议和多源�
   }
   for (const PORT of [0, 65536, 'not-a-port']) assert.equal(envSchema.safeParse({ ...valid, PORT }).success, false)
   assert.equal(envSchema.safeParse({ ...valid, PORT: '4000', DATABASE_URL: 'postgres://localhost/database' }).success, true)
+})
+
+test('数据库连接池/事务默认值与配置映射一致，可覆盖且等待有上限', () => {
+  const defaults = envSchema.parse(valid)
+  assert.equal(defaults.DB_POOL_MAX, 2)
+  assert.equal(defaults.DB_CONNECT_TIMEOUT_MS, 15000)
+  assert.equal(defaults.DB_TRANSACTION_TIMEOUT_MS, 15000)
+  assert.deepEqual(createPrismaPoolConfig(defaults), {
+    connectionString: valid.DATABASE_URL, max: 2, connectionTimeoutMillis: 15000,
+  })
+  assert.deepEqual(createPrismaTransactionOptions(defaults), { maxWait: 15000, timeout: 15000 })
+  const configured = envSchema.parse({ ...valid, DB_POOL_MAX: '4', DB_CONNECT_TIMEOUT_MS: '20000',
+    DB_TRANSACTION_TIMEOUT_MS: '25000' })
+  assert.deepEqual(createPrismaPoolConfig(configured), {
+    connectionString: valid.DATABASE_URL, max: 4, connectionTimeoutMillis: 20000,
+  })
+  assert.deepEqual(createPrismaTransactionOptions(configured), { maxWait: 20000, timeout: 25000 })
+})
+
+test('拒绝零值、空值、非整数及越界连接池/连接等待配置', () => {
+  for (const DB_POOL_MAX of ['', 0, -1, 1.5, 21, 'not-a-number']) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_POOL_MAX }).success, false)
+  }
+  for (const DB_CONNECT_TIMEOUT_MS of ['', 0, 999, 60001, 15000.5, 'not-a-number']) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_CONNECT_TIMEOUT_MS }).success, false)
+  }
+  for (const DB_POOL_MAX of [1, 20]) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_POOL_MAX }).success, true)
+  }
+  for (const DB_CONNECT_TIMEOUT_MS of [1000, 60000]) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_CONNECT_TIMEOUT_MS }).success, true)
+  }
+  for (const DB_TRANSACTION_TIMEOUT_MS of ['', 0, 999, 60001, 15000.5, 'not-a-number']) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_TRANSACTION_TIMEOUT_MS }).success, false)
+  }
+  for (const DB_TRANSACTION_TIMEOUT_MS of [1000, 60000]) {
+    assert.equal(envSchema.safeParse({ ...valid, DB_TRANSACTION_TIMEOUT_MS }).success, true)
+  }
 })
 
 test('可信代理默认关闭，支持明确 IP/CIDR；拒绝全信任、跳数、/0 与非法值', () => {
